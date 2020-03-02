@@ -2,6 +2,7 @@
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/FrontendActions.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/CommonOptionsParser.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Tooling.h"
+#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Refactoring.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchers.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchFinder.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/AST/ASTContext.h"
@@ -9,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <sstream>
 // Declares llvm::cl::extrahelp.
 #include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/CommandLine.h"
 
@@ -49,7 +51,7 @@ Comparator compFunctor = [](std::pair<std::string, int> elem1 ,std::pair<std::st
 				return elem1.second < elem2.second;
 			};
 
-std::set<std::pair<std::string, int>, Comparator> depthSorted;
+std::vector<std::pair<std::string, int>> depthSorted;
 //----------------------------------------------------------------------------------------------------------------------------------------------//
 /*
 StatementMatcher LoopMatcher =
@@ -59,6 +61,26 @@ StatementMatcher LoopMatcher =
 
 DeclarationMatcher globalMatcher = varDecl(hasDeclContext(translationUnitDecl())).bind("global");
 StatementMatcher labelMatcher = labelStmt().bind("label");
+
+std::stringstream structDump(){
+    std::stringstream ss;
+    //building the structs of scope in order of depth.
+    for (auto label : depthSorted){
+        ss<<"struct s_"<<label.first<<" {\n"<<"struct s_"<<parenChilMap[label.first]<<" * s;\n";
+        for(auto var : scopes[label.first].vars){
+	//currently not adding any functionality to handle or structs any differently.
+	if(var.second.find('[') != std::string::npos){
+		ss<<var.second.substr(0, var.second.find(' '))<<"* "<<var.first<<":\n";    		
+            }
+	else{
+                ss<<var.second<<"* "<<var.first<<";\n";;
+           }
+        }
+        ss<<"};\n\n";
+    }
+
+    return ss;
+}
 
 class GlobalBuilder : public MatchFinder::MatchCallback {
 public :
@@ -160,11 +182,30 @@ public :
     }
 };
 
+/*
+class StructDumper : public MatchFinder::MatchCallback {
+public:
+  StructDumper(std::map< std::string, Replacements > *Replace, std::string stringToDump) : Replace(Replace), stringToDump(stringToDump) {}
+
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const FunctionDecl *fd = Result.Nodes.getNodeAs<clang::FunctionDecl>("main")) {
+      Replacement Rep(*(Result.SourceManager), fd->getLocStart(), 0, stringToDump);
+      Replace->insert(Rep);
+      }
+  }
+
+private:
+  std::map< std::string, Replacements > *Replace;
+  std::string stringToDump;
+};
+*/
+
 //----------------------------------------------------------------------------------------main starts------------------------------------------------------------------------------------------------------------//
 int main(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
-  ClangTool Tool(OptionsParser.getCompilations(),
-                 OptionsParser.getSourcePathList());
+  ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+  RefactoringTool refactorTool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+
 //Find all the globals and labelStmt first.
   GlobalBuilder globalBuilder;
   LabelFinder labelBuilder;
@@ -202,14 +243,38 @@ int main(int argc, const char **argv) {
 	  }
 	  llvm::errs()<<"\n";
   }
-  llvm::errs()<<"\n depths";
+  llvm::errs()<<"\ndepths\n";
 
-  depthSorted = std::set<std::pair<std::string, int>, Comparator>(depths.begin(), depths.end(), compFunctor);
-  for (auto depth : depthSorted ){
+//The Depths need to be sorted.
+  depthSorted = std::vector<std::pair<std::string, int>> (depths.begin(), depths.end());
+  std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
+
+
+  for (auto depth : depths ){
+        llvm::errs() << depth.first<<" "<<depth.second<<"\n";
+  }
+  
+  llvm::errs()<<"\nsorted depths\n";
+
+  for (auto depth : depthSorted){
   	llvm::errs() << depth.first<<" "<<depth.second<<"\n";
   }
 
+//call structDump() to get the structures created.
+  std::stringstream ss = structDump();
+  llvm::errs()<<ss.str();
+   
 
+/* 
+  StructDumper structDumper(&refactorTool.getReplacements(), ss.str());
+  MatchFinder FinderRef;
+  FinderRef.addMatcher(functionDecl(hasName("main")).bind("main"), &structDumper);
+  refactorTool.run(newFrontendActionFactory(&FinderRef).get());
+  
+  llvm::outs() << "Replacements collected by the tool:\n";
+  for (auto &r : refactorTool.getReplacements()) {
+    llvm::outs() << r.toString() << "\n";
+  }
+*/
     return 0;
 }
-
