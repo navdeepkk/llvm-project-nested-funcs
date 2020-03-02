@@ -49,7 +49,7 @@ Comparator compFunctor = [](std::pair<std::string, int> elem1 ,std::pair<std::st
 				return elem1.second < elem2.second;
 			};
 
-std::set<std::pair<std::string, int>, Comparator> depthSorted(depths.begin(), depths.end(), compFunctor);
+std::set<std::pair<std::string, int>, Comparator> depthSorted;
 //----------------------------------------------------------------------------------------------------------------------------------------------//
 /*
 StatementMatcher LoopMatcher =
@@ -108,11 +108,13 @@ class LabelRelBuilder : public MatchFinder::MatchCallback{
         SourceManager *sm = Result.SourceManager;
         if (const LabelStmt *ls = Result.Nodes.getNodeAs<clang::LabelStmt>("child")){
             if (const LabelStmt *lp = Result.Nodes.getNodeAs<clang::LabelStmt>("parent")){
-                parenChilMap[ls->getName()] = lp->getName();
-                depths[ls->getName()] = depths[lp->getName()]; 
+		    llvm::errs()<<"case1: \n";
+		parenChilMap[ls->getName()] = lp->getName();
+                depths[ls->getName()] = depths[lp->getName()] + 1; 
             }
             else if (const FunctionDecl *fd = Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")){
-                parenChilMap[ls->getName()] = fd->getNameAsString();
+		    llvm::errs()<<"case2: \n";
+		    parenChilMap[ls->getName()] = fd->getNameAsString();
                 //assuming that the nodes are visited in order of depth
                 depths[ls->getName()] = 1; 
             }
@@ -134,15 +136,15 @@ public :
 		      //iterate through all children and visit all declstmt and then vardecl. get there type and store in scopes struct
 		      //llvm::errs()<<"label\n";
 		      for(auto child  = cs->child_begin(); child != cs->child_end() ;child++){
-           	      if(const clang::DeclStmt *ds = dyn_cast<clang::DeclStmt>(*child)){
-                            for(auto child2 = ds->decl_begin(); child2 != ds->decl_end(); child2++){
+           	      if(const clang::DeclStmt *ds = dyn_cast<clang::DeclStmt>(*child)){ 
+			    for(auto child2 = ds->decl_begin(); child2 != ds->decl_end(); child2++){
                             if(const clang::VarDecl *vd = dyn_cast<clang::VarDecl>(*child2)){
                                     std::string varloc =  vd->getBeginLoc().printToString(*sm);
                                     varloc = varloc.substr(varloc.find(':') + 1, varloc.find(':'));
                                     varloc = varloc.substr(0,varloc.find(':'));
                                     //llvm::errs()<<varloc<<"\n";
                                     //if line number of varibale is less than line number of compound stmt add it to its scope.
-                                    if(std::stoi(varloc) < std::stoi(loc)){
+                                    if(std::stoi(varloc) <= std::stoi(loc)){
 					    //llvm::errs()<<ls->getName()<<"\n";
 					    //llvm::errs()<<vd->getQualifiedNameAsString()<<"\n";
 					    //llvm::errs()<<vd->getType().getAsString()<<"\n";
@@ -184,7 +186,7 @@ int main(int argc, const char **argv) {
   }*/
 
 //need to add the nodes immediately nested in main to the parenChilMap.
-  Finder.addMatcher(labelStmt(hasParent(compoundStmt(hasParent(functionDecl(hasName("main")).bind("parent"))))).bind("child"), &labelRelBuilder);
+//Finder.addMatcher(labelStmt(hasParent(compoundStmt(hasParent(functionDecl(hasName("main")).bind("parent"))))).bind("child"), &labelRelBuilder);
 //not removing above logic right now but going to find thte variable to build up scope struct.
 //for all nodes find the variables that need to be passed on into its scope.
   Finder.addMatcher(labelStmt(hasParent(compoundStmt().bind("parent"))).bind("child"), &structBuilder); 
@@ -192,17 +194,21 @@ int main(int argc, const char **argv) {
   for(auto label : labels){
   	llvm::errs()<<"child "<<label<<" parent"<<parenChilMap[label]<<"\n";
   } 
-  /*
-  for(auto label : labels){
-  	llvm::errs()<<parenChilMap[label]<<"\n";
-  } 
+
   for (auto label: labels){
 	  llvm::errs()<<scopes[label].name<<": ";
   	  for(auto it : scopes[label].vars){
 	  	llvm::errs()<<it.first<<" "<<it.second<<" ";
 	  }
+	  llvm::errs()<<"\n";
   }
-  */
+  llvm::errs()<<"\n depths";
+
+  depthSorted = std::set<std::pair<std::string, int>, Comparator>(depths.begin(), depths.end(), compFunctor);
+  for (auto depth : depthSorted ){
+  	llvm::errs() << depth.first<<" "<<depth.second<<"\n";
+  }
+
 
     return 0;
 }
