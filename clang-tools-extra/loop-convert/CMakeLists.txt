@@ -9,10 +9,11 @@ target_link_libraries(loop-convert
   clangBasic
   clangASTMatchers
   clangAST
-  clangBasic
+  clangRewrite
   clangDynamicASTMatchers
   clangFrontend
   clangSerialization
+  LLVMSupport
   )
 
 
