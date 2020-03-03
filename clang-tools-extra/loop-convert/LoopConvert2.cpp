@@ -32,6 +32,7 @@ std::vector<GlobalVars> globalVars;
 std::vector<std::string > labels;
 std::unordered_map< std::string, std::string> parenChilMap;
 std::unordered_map<std::string, scope> scopes;
+std::unordered_map<std::string, std::string> sourceLocs;
 
 using namespace clang::SrcMgr; 
 using namespace clang::tooling;
@@ -106,10 +107,15 @@ public :
 
 class LabelFinder : public MatchFinder::MatchCallback {
 public :
-	LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite){}
-    virtual void run(const MatchFinder::MatchResult &Result) {    
+    LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite){}
+    virtual void run(const MatchFinder::MatchResult &Result) {
+      SourceManager *sm = Result.SourceManager;    
       if (const LabelStmt *ls = Result.Nodes.getNodeAs<clang::LabelStmt>("label")){
 		labels.push_back(ls->getName());
+		std::string loc = ls->getBeginLoc().printToString(*sm);
+                loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+                loc = loc.substr(0,loc.find(':'));
+	        sourceLocs[ls->getName()] = loc; 	
       }
     }
     Rewriter &Rewrite;
@@ -138,14 +144,20 @@ class LabelRelBuilder : public MatchFinder::MatchCallback{
         SourceManager *sm = Result.SourceManager;
         if (const LabelStmt *ls = Result.Nodes.getNodeAs<clang::LabelStmt>("child")){
             if (const LabelStmt *lp = Result.Nodes.getNodeAs<clang::LabelStmt>("parent")){
-		    //llvm::errs()<<"case1: \n";
+		llvm::errs()<<"case1: \n";
 		parenChilMap[ls->getName()] = lp->getName();
                 depths[ls->getName()] = depths[lp->getName()] + 1; 
             }
             else if (const FunctionDecl *fd = Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")){
-		    //llvm::errs()<<"case2: \n";
-		    parenChilMap[ls->getName()] = fd->getNameAsString();
+		llvm::errs()<<"case2: \n";
+		parenChilMap[ls->getName()] = fd->getNameAsString();
                 //assuming that the nodes are visited in order of depth
+		//push sourceLoc of functionDecl pf main into the sourceLocs structure.
+		std::string loc = fd->getBeginLoc().printToString(*sm);
+                loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+                loc = loc.substr(0,loc.find(':'));
+		//llvm::errs()<<loc<<"\n";
+                sourceLocs[fd->getNameAsString()] = loc;
                 depths[ls->getName()] = 1; 
             }
         }
@@ -156,7 +168,7 @@ class LabelRelBuilder : public MatchFinder::MatchCallback{
 
 class StructBuilder : public MatchFinder::MatchCallback {
 public :
-	StructBuilder(Rewriter &Rewrite) : Rewrite(Rewrite){}
+	StructBuilder(Rewriter &Rewrite) : Rewrite(Rewrite){}/*
     virtual void run(const MatchFinder::MatchResult &Result) {
       SourceManager* const sm = Result.SourceManager;
       if (const LabelStmt *ls = Result.Nodes.getNodeAs<clang::LabelStmt>("child")){
@@ -188,9 +200,31 @@ public :
                 }
 		}//llvm::errs()<<"child\n";
 	      }
-      }
+            }
           }
+*/
 
+      virtual void run(const MatchFinder::MatchResult &Result) {
+      SourceManager* const sm = Result.SourceManager;
+      if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("child")){
+      	//find the appropriate parent child pair to insert it in. itereate through parenChilMap and check if the source loc of the vardecl is in between of parent and child.
+	std::string loc =  vd->getBeginLoc().printToString(*sm);
+        loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+        loc = loc.substr(0,loc.find(':'));
+	int varloc = std::stoi(loc);
+	llvm::errs()<<vd->getQualifiedNameAsString()<<varloc<<"\n";
+	for (auto elem : parenChilMap){
+		llvm::errs()<<elem.first<<" "<<elem.second<<"\n";
+	}
+	for (auto elem : parenChilMap){
+		llvm::errs()<<std::stoi(sourceLocs[elem.first])<<" "<<std::stoi(sourceLocs[elem.second])<<"\n";
+		if(std::stoi(sourceLocs[elem.first]) >= varloc  && varloc >=  std::stoi(sourceLocs[elem.second])){
+			scopes[elem.first].name = elem.first;
+                        scopes[elem.first].vars[vd->getQualifiedNameAsString()] = vd->getType().getAsString();
+		}
+	}
+      }
+      }
        Rewriter &Rewrite;
 };
 
@@ -226,16 +260,17 @@ public:
   Finder.addMatcher(globalMatcher, &globalBuilder);
 //find all the labelStmt and store there name in a vector of strings.
   Finder.addMatcher(labelMatcher, &labelBuilder);
-//below matcher returns all node at depth level one.
-  Finder.addMatcher(labelStmt(hasParent(compoundStmt(hasParent(functionDecl().bind("parent"))))).bind("child"), &labelRelBuilder); 
+//below matcher returns all nodes at depth level one.
+  Finder.addMatcher(labelStmt(hasParent(compoundStmt(hasParent(functionDecl().bind("parent"))))).bind("child"), &labelRelBuilder);
 //find the parent child relationship of label statements by matching all nodes having a compound statement as parent;
-  Finder.addMatcher(labelStmt(hasParent(compoundStmt(hasParent(labelStmt().bind("parent"))))).bind("child"), &labelRelBuilder);  
+  Finder.addMatcher(labelStmt(hasAncestor(labelStmt().bind("parent"))).bind("child"), &labelRelBuilder);
 //not removing above logic right now but going to find the variable to build up scope struct.
 //for all nodes find the variables that need to be passed on into its scope.
-  Finder.addMatcher(labelStmt(hasParent(compoundStmt().bind("parent"))).bind("child"), &structBuilder); 
+  Finder.addMatcher(varDecl().bind("child"), &structBuilder); 
+
 //after this call the depths will be sorted. structBuilder has a logicc to sort the depths.
 //adding code to find the main function and rewrite something there.	  
-  DelayedFinder.addMatcher(functionDecl(hasName("main")).bind("main"), &structDumper); 
+ // DelayedFinder.addMatcher(functionDecl(hasName("main")).bind("main"), &structDumper); 
 //Next thing would be to find the depths of the call expressions, so appropriate redirections for variables may be provided.
   //Finder.addMatcher(callExpr(hasParent)) 
   }
@@ -244,7 +279,21 @@ public:
 void HandleTranslationUnit(ASTContext &Context) override {
     // Run the matchers when we have the whole TU parsed.
     Finder.matchAST(Context);
-
+   
+    for (auto elem : parenChilMap){
+	    llvm::errs()<<stoi(sourceLocs[elem.first])<<" "<<stoi(sourceLocs[elem.second])<<"\n";
+    }
+    /*
+    for(auto label : labels){
+	//llvm::errs()<<label<<"sorceloc: "<< sourceLocs[label]<<"\n";
+        //llvm::errs()<<"child "<<label<<" parent"<<parenChilMap[label]<<"\n";
+  }
+  */
+    /*
+   for (auto loc : sourceLocs){
+   	llvm::errs()<<loc.first<<" "<<loc.second<<"\n";
+   } 
+*/
     DelayedFinder.matchAST(Context);
   }
 
@@ -284,12 +333,14 @@ public:
 class StructDumper : public MatchFinder::MatchCallback {
 public:
   StructDumper(std::map< std::string, Replacements > *Replace, std::string stringToDump) : Replace(Replace), stringToDump(stringToDump) {}
+
   virtual void run(const MatchFinder::MatchResult &Result) {
     if (const FunctionDecl *fd = Result.Nodes.getNodeAs<clang::FunctionDecl>("main")) {
       Replacement Rep(*(Result.SourceManager), fd->getLocStart(), 0, stringToDump);
       Replace->insert(Rep);
       }
   }
+
 private:
   std::map< std::string, Replacements > *Replace;
   std::string stringToDump;
@@ -321,6 +372,7 @@ int main(int argc, const char **argv) {
   for(auto label : labels){  
   	llvm::errs()<<label<<"\n";
   }
+
 //need to add the nodes immediately nested in main to the parenChilMap.
 //Finder.addMatcher(labelStmt(hasParent(compoundStmt(hasParent(functionDecl(hasName("main")).bind("parent"))))).bind("child"), &labelRelBuilder);
 //not removing above logic right now but going to find thte variable to build up scope struct.
@@ -335,6 +387,7 @@ int main(int argc, const char **argv) {
   for(auto label : labels){
   	llvm::errs()<<"child "<<label<<" parent"<<parenChilMap[label]<<"\n";
   } 
+
   for (auto label: labels){
 	  llvm::errs()<<scopes[label].name<<": ";
   	  for(auto it : scopes[label].vars){
@@ -343,17 +396,22 @@ int main(int argc, const char **argv) {
 	  llvm::errs()<<"\n";
   }
   llvm::errs()<<"\ndepths\n";
+
 //The Depths need to be sorted.
   depthSorted = std::vector<std::pair<std::string, int>> (depths.begin(), depths.end());
   std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
+
+
   for (auto depth : depths ){
         llvm::errs() << depth.first<<" "<<depth.second<<"\n";
   }
   
   llvm::errs()<<"\nsorted depths\n";
+
   for (auto depth : depthSorted){
   	llvm::errs() << depth.first<<" "<<depth.second<<"\n";
   }
+
 //call structDump() to get the structures created.
   std::stringstream ss = structDump();
   llvm::errs()<<ss.str();
