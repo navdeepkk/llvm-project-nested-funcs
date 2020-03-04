@@ -43,6 +43,7 @@ static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
 
 std::unordered_map<std::string, std::string> sourceLocs;
+std::unordered_map<std::string, int> callDepths;
 
 std::vector<std::pair<std::string, int>> depthSorted;
 
@@ -53,7 +54,7 @@ std::unordered_map<std::string, int> depths;
 std::stringstream ss;
 //------------------------------------------------/global decls end-------------------------------------------//
 
-//----------------------------------logic to convert the depth into a sorted list depthsorted.
+//------------------------------------------------------logic to convert the depth into a sorted list depthsorted.
 typedef std::function<bool(std::pair<std::string, int>, std::pair<std::string, int>)> Comparator;
 Comparator compFunctor = [](std::pair<std::string, int> elem1 ,std::pair<std::string, int> elem2)
 			{
@@ -77,7 +78,7 @@ void structDump(){
         ss<<"};\n\n";
     }
 }
-
+//-------------------------------------------------------------------------------------------------------------//
 class GlobalBuilder : public MatchFinder::MatchCallback {
 public :
 	GlobalBuilder(Rewriter &Rewrite) : Rewrite(Rewrite){}
@@ -95,7 +96,7 @@ public :
     }
     Rewriter &Rewrite;
 };
-
+//---------------------------------------------------------------------------------------------------------------//
 class LabelFinder : public MatchFinder::MatchCallback {
 public :
 	LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite){}
@@ -112,7 +113,7 @@ public :
     }
     Rewriter &Rewrite;
 };
-
+//--------------------------------------------------------------------------------------------------------------------//
 class LabelRelBuilder : public MatchFinder::MatchCallback{
     public:
 	LabelRelBuilder(Rewriter &Rewrite) : Rewrite(Rewrite){}
@@ -140,7 +141,7 @@ class LabelRelBuilder : public MatchFinder::MatchCallback{
     }
     Rewriter &Rewrite;
 };
-
+//-------------------------------------------------------------------------------------------------------------------------//
 class StructBuilder : public MatchFinder::MatchCallback {
 public :
 	StructBuilder(Rewriter &Rewrite) : Rewrite(Rewrite){}
@@ -156,9 +157,9 @@ public :
         loc = loc.substr(0,loc.find(':'));
 	int varloc = std::stoi(loc);
 	for (auto elem : parenChilMap){
-		llvm::errs()<<sourceLocs[elem.first]<<" "<<sourceLocs[elem.second]<<"\n";
+		//llvm::errs()<<sourceLocs[elem.first]<<" "<<sourceLocs[elem.second]<<"\n";
 		if(std::stoi(sourceLocs[elem.first]) >= varloc  && varloc >=  std::stoi(sourceLocs[elem.second])){
-			llvm::errs()<<"inserting in:"<<elem.first<<"\n";
+		//	llvm::errs()<<"inserting in:"<<elem.first<<"\n";
 			scopes[elem.first].name = elem.first;
                         scopes[elem.first].vars[vd->getQualifiedNameAsString()] = vd->getType().getAsString();
 		}
@@ -167,7 +168,7 @@ public :
       }
     Rewriter &Rewrite;
 };
-
+//---------------------------------------------------------------------------------------------------------------------------//
 class StructDumper : public MatchFinder::MatchCallback {
 public:
 	StructDumper(Rewriter &Rewrite) : Rewrite(Rewrite){}
@@ -178,8 +179,8 @@ public:
 	}
 	virtual void onEndOfTranslationUnit(){
 		depthSorted = std::vector<std::pair<std::string, int>> (depths.begin(), depths.end());
-      	std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
-      	structDump();
+      		std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
+      		structDump();
 		//llvm:errs()<<ss.str();
 		Rewrite.InsertText(sourceLoc, ss.str(), true, true);
 	}
@@ -187,11 +188,41 @@ private:
 	Rewriter &Rewrite;
 	SourceLocation sourceLoc;
 };
+//-----------------------------------------------------------------------------------------------------------------------//
 
+class CallDepth : public MatchFinder::MatchCallback {
+public:
+        CallDepth(){}
+        virtual void run(const MatchFinder::MatchResult &Result) {
+        SourceManager* const sm = Result.SourceManager;
+	if (const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("depth1")){
+		std::string callName = ce->getDirectCallee()->getNameInfo().getName().getAsString();
+		if(std::find(labels.begin(), labels.end(), callName) != labels.end()){
+			std::string loc =  ce->getBeginLoc().printToString(*sm);
+        		loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+        		loc = loc.substr(0,loc.find(':'));
+			callDepths[callName + loc] = 1;
+		}
+	}
+	else if(const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("depth")){
+		std::string callName = ce->getDirectCallee()->getNameInfo().getName().getAsString();
+		if(const LabelStmt *ls = Result.Nodes.getNodeAs<clang::LabelStmt>("parent")){
+			if(std::find(labels.begin(), labels.end(), callName) != labels.end()){
+				std::string callName = ce->getDirectCallee()->getNameInfo().getName().getAsString();
+				std::string loc =  ce->getBeginLoc().printToString(*sm);
+				loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+				loc = loc.substr(0,loc.find(':'));
+				callDepths[callName + loc] = depths[ls->getName()] + 1;
+			}		
+		}
+	}
+	}
+};
+//--------------------------------------------------------------------------------------------------------------------------//
 
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R):  globalBuilder(R), structDumper(R), labelRelBuilder(R), labelBuilder(R), structBuilder(R){
+  MyASTConsumer(Rewriter &R):  globalBuilder(R), structDumper(R), labelRelBuilder(R), labelBuilder(R), structBuilder(R), callDepth(){
 //all code from main goes here.
 //Find all the globals and labelStmt first.
 //Find all the globals and store them in struct with type and identfier.
@@ -210,7 +241,10 @@ public:
 //adding code to find the main function and rewrite something there.	  
   DelayedFinder.addMatcher(functionDecl(hasName("main")).bind("main"), &structDumper); 
 //Next thing would be to find the depths of the call expressions, so appropriate redirections for variables may be provided.
-  Finder.addMatcher(callExpr(hasParent)) 
+//first finding all call at depth one.
+  DelayedFinder.addMatcher(callExpr(hasParent(compoundStmt(hasParent(functionDecl(hasName("main")))))).bind("depth1"), &callDepth);
+//finding the call expressions at more depths
+  DelayedFinder.addMatcher(callExpr(hasAncestor(labelStmt().bind("parent"))).bind("depth"), &callDepth); 
   }
 
 void HandleTranslationUnit(ASTContext &Context) override {
@@ -224,6 +258,9 @@ void HandleTranslationUnit(ASTContext &Context) override {
         llvm::errs() << depth.first<<" "<<depth.second<<"\n";
   }*/
     DelayedFinder.matchAST(Context);
+    for(auto depths: callDepths){
+    	llvm::errs()<<depths.first<<" "<<depths.second<<"\n";
+    }
   }
 
 private:
@@ -232,17 +269,18 @@ private:
   LabelRelBuilder labelRelBuilder;
   StructBuilder structBuilder;
   StructDumper structDumper;
+  CallDepth callDepth;
   MatchFinder Finder;
   MatchFinder DelayedFinder;
 };
-
+//----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {
 public:
     MyFrontendAction() {}
     Rewriter TheRewriter;
 
     void EndSourceFileAction() override {
-        this->TheRewriter.getEditBuffer(this->TheRewriter.getSourceMgr().getMainFileID()).write(llvm::outs());
+        //this->TheRewriter.getEditBuffer(this->TheRewriter.getSourceMgr().getMainFileID()).write(llvm::outs());
     }          
     virtual std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
       this->TheRewriter.setSourceMgr(Compiler.getSourceManager(), Compiler.getLangOpts());
