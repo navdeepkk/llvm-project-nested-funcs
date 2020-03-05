@@ -1,4 +1,6 @@
-itn main(){
+#include<stdio.h>
+
+int main(){
 r:{
         int b;
             p:{

@@ -1,0 +1,168 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+CallDepth	./LoopConvert.cpp	/^  CallDepth() {}$/;"	f	class:CallDepth
+CallDepth	./LoopConvert.cpp	/^class CallDepth : public MatchFinder::MatchCallback {$/;"	c	file:
+Comparator	./LoopConvert.cpp	/^    Comparator;$/;"	t	file:
+Comparator	./LoopConvert2.cpp	/^    Comparator;$/;"	t	file:
+Comparator	./LoopConvertInitial.cpp	/^    Comparator;$/;"	t	file:
+CreateASTConsumer	./LoopConvert.cpp	/^  CreateASTConsumer(clang::CompilerInstance &Compiler, llvm::StringRef InFile) {$/;"	f	class:MyFrontendAction
+CreateASTConsumer	./LoopConvert2.cpp	/^  CreateASTConsumer(clang::CompilerInstance &Compiler, llvm::StringRef InFile) {$/;"	f	class:MyFrontendAction
+DelayedFinder	./LoopConvert.cpp	/^  MatchFinder DelayedFinder;$/;"	m	class:MyASTConsumer	file:
+DelayedFinder	./LoopConvert2.cpp	/^  MatchFinder DelayedFinder;$/;"	m	class:MyASTConsumer	file:
+Finder	./LoopConvert.cpp	/^  MatchFinder Finder;$/;"	m	class:MyASTConsumer	file:
+Finder	./LoopConvert2.cpp	/^  MatchFinder Finder;$/;"	m	class:MyASTConsumer	file:
+GlobalBuilder	./LoopConvert.cpp	/^  GlobalBuilder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:GlobalBuilder
+GlobalBuilder	./LoopConvert.cpp	/^class GlobalBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+GlobalBuilder	./LoopConvert2.cpp	/^  GlobalBuilder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:GlobalBuilder
+GlobalBuilder	./LoopConvert2.cpp	/^class GlobalBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+GlobalBuilder	./LoopConvertInitial.cpp	/^  GlobalBuilder() {}$/;"	f	class:GlobalBuilder
+GlobalBuilder	./LoopConvertInitial.cpp	/^class GlobalBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+GlobalVars	./LoopConvert.cpp	/^struct GlobalVars {$/;"	s	file:
+GlobalVars	./LoopConvert2.cpp	/^struct GlobalVars {$/;"	s	file:
+GlobalVars	./LoopConvertInitial.cpp	/^struct GlobalVars {$/;"	s	file:
+LabelFinder	./LoopConvert.cpp	/^  LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:LabelFinder
+LabelFinder	./LoopConvert.cpp	/^class LabelFinder : public MatchFinder::MatchCallback {$/;"	c	file:
+LabelFinder	./LoopConvert2.cpp	/^  LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:LabelFinder
+LabelFinder	./LoopConvert2.cpp	/^class LabelFinder : public MatchFinder::MatchCallback {$/;"	c	file:
+LabelFinder	./LoopConvertInitial.cpp	/^  LabelFinder() {}$/;"	f	class:LabelFinder
+LabelFinder	./LoopConvertInitial.cpp	/^class LabelFinder : public MatchFinder::MatchCallback {$/;"	c	file:
+LabelRelBuilder	./LoopConvert.cpp	/^  LabelRelBuilder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:LabelRelBuilder
+LabelRelBuilder	./LoopConvert.cpp	/^class LabelRelBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+LabelRelBuilder	./LoopConvert2.cpp	/^  LabelRelBuilder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:LabelRelBuilder
+LabelRelBuilder	./LoopConvert2.cpp	/^class LabelRelBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+LabelRelBuilder	./LoopConvertInitial.cpp	/^  LabelRelBuilder() {}$/;"	f	class:LabelRelBuilder
+LabelRelBuilder	./LoopConvertInitial.cpp	/^class LabelRelBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+MyASTConsumer	./LoopConvert.cpp	/^  MyASTConsumer(Rewriter &R)$/;"	f	class:MyASTConsumer
+MyASTConsumer	./LoopConvert.cpp	/^class MyASTConsumer : public ASTConsumer {$/;"	c	file:
+MyASTConsumer	./LoopConvert2.cpp	/^  MyASTConsumer(Rewriter &R)$/;"	f	class:MyASTConsumer
+MyASTConsumer	./LoopConvert2.cpp	/^class MyASTConsumer : public ASTConsumer {$/;"	c	file:
+MyFrontendAction	./LoopConvert.cpp	/^  MyFrontendAction() {}$/;"	f	class:MyFrontendAction
+MyFrontendAction	./LoopConvert.cpp	/^class MyFrontendAction : public ASTFrontendAction {$/;"	c	file:
+MyFrontendAction	./LoopConvert2.cpp	/^  MyFrontendAction() {}$/;"	f	class:MyFrontendAction
+MyFrontendAction	./LoopConvert2.cpp	/^class MyFrontendAction : public ASTFrontendAction {$/;"	c	file:
+Rewrite	./LoopConvert.cpp	/^  Rewriter &Rewrite;$/;"	m	class:GlobalBuilder	file:
+Rewrite	./LoopConvert.cpp	/^  Rewriter &Rewrite;$/;"	m	class:LabelFinder	file:
+Rewrite	./LoopConvert.cpp	/^  Rewriter &Rewrite;$/;"	m	class:LabelRelBuilder	file:
+Rewrite	./LoopConvert.cpp	/^  Rewriter &Rewrite;$/;"	m	class:StructBuilder	file:
+Rewrite	./LoopConvert.cpp	/^  Rewriter &Rewrite;$/;"	m	class:StructDumper	file:
+Rewrite	./LoopConvert.cpp	/^  Rewriter &Rewrite;$/;"	m	class:StructInit	file:
+Rewrite	./LoopConvert2.cpp	/^  Rewriter &Rewrite;$/;"	m	class:GlobalBuilder	file:
+Rewrite	./LoopConvert2.cpp	/^  Rewriter &Rewrite;$/;"	m	class:LabelFinder	file:
+Rewrite	./LoopConvert2.cpp	/^  Rewriter &Rewrite;$/;"	m	class:LabelRelBuilder	file:
+Rewrite	./LoopConvert2.cpp	/^  Rewriter &Rewrite;$/;"	m	class:StructBuilder	file:
+Rewrite	./LoopConvert2.cpp	/^  Rewriter &Rewrite;$/;"	m	class:StructDumper	file:
+Rewrite	./LoopConvertInitial.cpp	/^  Rewriter &Rewrite;$/;"	m	class:StructDumper	file:
+StructBuilder	./LoopConvert.cpp	/^  StructBuilder(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:StructBuilder
+StructBuilder	./LoopConvert.cpp	/^class StructBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+StructBuilder	./LoopConvert2.cpp	/^  StructBuilder(Rewriter &Rewrite)$/;"	f	class:StructBuilder
+StructBuilder	./LoopConvert2.cpp	/^class StructBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+StructBuilder	./LoopConvertInitial.cpp	/^  StructBuilder() {}$/;"	f	class:StructBuilder
+StructBuilder	./LoopConvertInitial.cpp	/^class StructBuilder : public MatchFinder::MatchCallback {$/;"	c	file:
+StructDumper	./LoopConvert.cpp	/^  StructDumper(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:StructDumper
+StructDumper	./LoopConvert.cpp	/^class StructDumper : public MatchFinder::MatchCallback {$/;"	c	file:
+StructDumper	./LoopConvert2.cpp	/^  StructDumper(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:StructDumper
+StructDumper	./LoopConvert2.cpp	/^class StructDumper : public MatchFinder::MatchCallback {$/;"	c	file:
+StructDumper	./LoopConvertInitial.cpp	/^  StructDumper(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:StructDumper
+StructDumper	./LoopConvertInitial.cpp	/^class StructDumper : public MatchFinder::MatchCallback {$/;"	c	file:
+StructInit	./LoopConvert.cpp	/^  StructInit(Rewriter &Rewrite) : Rewrite(Rewrite) {}$/;"	f	class:StructInit
+StructInit	./LoopConvert.cpp	/^class StructInit : public MatchFinder::MatchCallback {$/;"	c	file:
+TheRewriter	./LoopConvert.cpp	/^  Rewriter TheRewriter;$/;"	m	class:MyFrontendAction	file:
+TheRewriter	./LoopConvert2.cpp	/^  Rewriter TheRewriter;$/;"	m	class:MyFrontendAction	file:
+callDepth	./LoopConvert.cpp	/^  CallDepth callDepth;$/;"	m	class:MyASTConsumer	file:
+callDepths	./LoopConvert.cpp	/^std::unordered_map<std::string, int> callDepths;$/;"	v
+compFunctor	./LoopConvert.cpp	/^Comparator compFunctor = [](std::pair<std::string, int> elem1,$/;"	v
+compFunctor	./LoopConvert2.cpp	/^Comparator compFunctor = [](std::pair<std::string, int> elem1,$/;"	v
+compFunctor	./LoopConvertInitial.cpp	/^Comparator compFunctor = [](std::pair<std::string, int> elem1,$/;"	v
+depthSorted	./LoopConvert.cpp	/^std::vector<std::pair<std::string, int>> depthSorted;$/;"	v
+depthSorted	./LoopConvert2.cpp	/^std::vector<std::pair<std::string, int>> depthSorted;$/;"	v
+depthSorted	./LoopConvertInitial.cpp	/^std::vector<std::pair<std::string, int>> depthSorted;$/;"	v
+depths	./LoopConvert.cpp	/^std::unordered_map<std::string, int> depths;$/;"	v
+depths	./LoopConvert2.cpp	/^std::unordered_map<std::string, int> depths;$/;"	v
+depths	./LoopConvertInitial.cpp	/^std::unordered_map<std::string, int> depths;$/;"	v
+globalBuilder	./LoopConvert.cpp	/^  GlobalBuilder globalBuilder;$/;"	m	class:MyASTConsumer	file:
+globalBuilder	./LoopConvert2.cpp	/^  GlobalBuilder globalBuilder;$/;"	m	class:MyASTConsumer	file:
+globalMatcher	./LoopConvert.cpp	/^DeclarationMatcher globalMatcher =$/;"	v
+globalMatcher	./LoopConvert2.cpp	/^DeclarationMatcher globalMatcher =$/;"	v
+globalMatcher	./LoopConvertInitial.cpp	/^DeclarationMatcher globalMatcher =$/;"	v
+globalVars	./LoopConvert.cpp	/^std::vector<GlobalVars> globalVars;$/;"	v
+globalVars	./LoopConvert2.cpp	/^std::vector<GlobalVars> globalVars;$/;"	v
+globalVars	./LoopConvertInitial.cpp	/^std::vector<GlobalVars> globalVars;$/;"	v
+labelBuilder	./LoopConvert.cpp	/^  LabelFinder labelBuilder;$/;"	m	class:MyASTConsumer	file:
+labelBuilder	./LoopConvert2.cpp	/^  LabelFinder labelBuilder;$/;"	m	class:MyASTConsumer	file:
+labelMatcher	./LoopConvert.cpp	/^StatementMatcher labelMatcher = labelStmt().bind("label");$/;"	v
+labelMatcher	./LoopConvert2.cpp	/^StatementMatcher labelMatcher = labelStmt().bind("label");$/;"	v
+labelMatcher	./LoopConvertInitial.cpp	/^StatementMatcher labelMatcher = labelStmt().bind("label");$/;"	v
+labelRelBuilder	./LoopConvert.cpp	/^  LabelRelBuilder labelRelBuilder;$/;"	m	class:MyASTConsumer	file:
+labelRelBuilder	./LoopConvert2.cpp	/^  LabelRelBuilder labelRelBuilder;$/;"	m	class:MyASTConsumer	file:
+labels	./LoopConvert.cpp	/^std::vector<std::string> labels;$/;"	v
+labels	./LoopConvert2.cpp	/^std::vector<std::string> labels;$/;"	v
+labels	./LoopConvertInitial.cpp	/^std::vector<std::string> labels;$/;"	v
+main	./LoopConvert.cpp	/^int main(int argc, const char **argv) {$/;"	f
+main	./LoopConvert2.cpp	/^int main(int argc, const char **argv) {$/;"	f
+main	./LoopConvertInitial.cpp	/^int main(int argc, const char **argv) {$/;"	f
+name	./LoopConvert.cpp	/^  std::string name;$/;"	m	struct:GlobalVars	file:
+name	./LoopConvert.cpp	/^  std::string name;$/;"	m	struct:scope	file:
+name	./LoopConvert2.cpp	/^  std::string name;$/;"	m	struct:GlobalVars	file:
+name	./LoopConvert2.cpp	/^  std::string name;$/;"	m	struct:scope	file:
+name	./LoopConvertInitial.cpp	/^  std::string name;$/;"	m	struct:GlobalVars	file:
+name	./LoopConvertInitial.cpp	/^  std::string name;$/;"	m	struct:scope	file:
+onEndOfTranslationUnit	./LoopConvert.cpp	/^  virtual void onEndOfTranslationUnit() {$/;"	f	class:StructDumper
+onEndOfTranslationUnit	./LoopConvert2.cpp	/^  virtual void onEndOfTranslationUnit() {$/;"	f	class:StructDumper
+onEndOfTranslationUnit	./LoopConvertInitial.cpp	/^  virtual void onEndOfTranslationUnit() {$/;"	f	class:StructDumper
+parenChilMap	./LoopConvert.cpp	/^std::unordered_map<std::string, std::string> parenChilMap;$/;"	v
+parenChilMap	./LoopConvert2.cpp	/^std::unordered_map<std::string, std::string> parenChilMap;$/;"	v
+parenChilMap	./LoopConvertInitial.cpp	/^std::unordered_map<std::string, std::string> parenChilMap;$/;"	v
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:CallDepth
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:GlobalBuilder
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:LabelFinder
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:LabelRelBuilder
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructBuilder
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructDumper
+run	./LoopConvert.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructInit
+run	./LoopConvert2.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:GlobalBuilder
+run	./LoopConvert2.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:LabelFinder
+run	./LoopConvert2.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:LabelRelBuilder
+run	./LoopConvert2.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructBuilder
+run	./LoopConvert2.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructDumper
+run	./LoopConvertInitial.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:GlobalBuilder
+run	./LoopConvertInitial.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:LabelFinder
+run	./LoopConvertInitial.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:LabelRelBuilder
+run	./LoopConvertInitial.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructBuilder
+run	./LoopConvertInitial.cpp	/^  virtual void run(const MatchFinder::MatchResult &Result) {$/;"	f	class:StructDumper
+scope	./LoopConvert.cpp	/^struct scope {$/;"	s	file:
+scope	./LoopConvert2.cpp	/^struct scope {$/;"	s	file:
+scope	./LoopConvertInitial.cpp	/^struct scope {$/;"	s	file:
+scopes	./LoopConvert.cpp	/^std::unordered_map<std::string, scope> scopes;$/;"	v
+scopes	./LoopConvert2.cpp	/^std::unordered_map<std::string, scope> scopes;$/;"	v
+scopes	./LoopConvertInitial.cpp	/^std::unordered_map<std::string, scope> scopes;$/;"	v
+sourceLoc	./LoopConvert.cpp	/^  SourceLocation sourceLoc;$/;"	m	class:StructDumper	file:
+sourceLoc	./LoopConvert.cpp	/^  SourceLocation sourceLoc;$/;"	m	class:StructInit	file:
+sourceLoc	./LoopConvert2.cpp	/^  SourceLocation sourceLoc;$/;"	m	class:StructDumper	file:
+sourceLoc	./LoopConvertInitial.cpp	/^  SourceLocation sourceLoc;$/;"	m	class:StructDumper	file:
+sourceLocs	./LoopConvert.cpp	/^std::unordered_map<std::string, std::string> sourceLocs;$/;"	v
+sourceLocs	./LoopConvert2.cpp	/^std::unordered_map<std::string, std::string> sourceLocs;$/;"	v
+ss	./LoopConvert.cpp	/^std::stringstream ss;$/;"	v
+ss	./LoopConvert2.cpp	/^std::stringstream ss;$/;"	v
+ss	./LoopConvertInitial.cpp	/^std::stringstream ss;$/;"	v
+ss2	./LoopConvert.cpp	/^std::stringstream ss2;$/;"	v
+structBuilder	./LoopConvert.cpp	/^  StructBuilder structBuilder;$/;"	m	class:MyASTConsumer	file:
+structBuilder	./LoopConvert2.cpp	/^  StructBuilder structBuilder;$/;"	m	class:MyASTConsumer	file:
+structDump	./LoopConvert.cpp	/^void structDump() {$/;"	f
+structDump	./LoopConvert2.cpp	/^void structDump() {$/;"	f
+structDump	./LoopConvertInitial.cpp	/^void structDump() {$/;"	f
+structDumper	./LoopConvert.cpp	/^  StructDumper structDumper;$/;"	m	class:MyASTConsumer	file:
+structDumper	./LoopConvert2.cpp	/^  StructDumper structDumper;$/;"	m	class:MyASTConsumer	file:
+structInit	./LoopConvert.cpp	/^  StructInit structInit;$/;"	m	class:MyASTConsumer	file:
+temp	./LoopConvert.cpp	/^  GlobalVars temp;$/;"	m	class:GlobalBuilder	file:
+temp	./LoopConvert2.cpp	/^  GlobalVars temp;$/;"	m	class:GlobalBuilder	file:
+temp	./LoopConvertInitial.cpp	/^  GlobalVars temp;$/;"	m	class:GlobalBuilder	file:
+type	./LoopConvert.cpp	/^  std::string type;$/;"	m	struct:GlobalVars	file:
+type	./LoopConvert2.cpp	/^  std::string type;$/;"	m	struct:GlobalVars	file:
+type	./LoopConvertInitial.cpp	/^  std::string type;$/;"	m	struct:GlobalVars	file:
+vars	./LoopConvert.cpp	/^  std::unordered_map<std::string, std::string> vars;$/;"	m	struct:scope	file:
+vars	./LoopConvert2.cpp	/^  std::unordered_map<std::string, std::string> vars;$/;"	m	struct:scope	file:
+vars	./LoopConvertInitial.cpp	/^  std::unordered_map<std::string, std::string> vars;$/;"	m	struct:scope	file:
