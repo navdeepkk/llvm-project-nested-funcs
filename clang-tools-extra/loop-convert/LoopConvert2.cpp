@@ -1,4 +1,9 @@
 // Declares clang::SyntaxOnlyAction.
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "/home/navdeep/work/projects/llvm-install/include/clang/AST/AST.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/AST/ASTContext.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchFinder.h"
@@ -11,10 +16,6 @@
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Refactoring.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Tooling.h"
 #include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/raw_ostream.h"
-#include <sstream>
-#include <string>
-#include <unordered_map>
-#include <vector>
 // Declares llvm::cl::extrahelp.
 #include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/CommandLine.h"
 
@@ -380,7 +381,7 @@ private:
 */
 
 //----------------------------------------------------------------------------------------main
-//starts------------------------------------------------------------------------------------------------------------//
+// starts------------------------------------------------------------------------------------------------------------//
 int main(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
   ClangTool Tool(OptionsParser.getCompilations(),

@@ -23,7 +23,7 @@ using namespace clang;
 using namespace std;
 using namespace clang::driver;
 //----------------------------------------------------global
-//decls----------------------------------------------//
+// decls----------------------------------------------//
 struct GlobalVars {
   std::string name;
   std::string type;
@@ -55,10 +55,10 @@ std::unordered_map<std::string, int> depths;
 std::stringstream ss;
 std::stringstream ss2;
 //------------------------------------------------/global decls
-//end-------------------------------------------//
+// end-------------------------------------------//
 
 //------------------------------------------------------logic to convert the
-//label depths into a sorted list depthsorted.
+// label depths into a sorted list depthsorted.
 typedef std::function<bool(std::pair<std::string, int>,
                            std::pair<std::string, int>)>
     Comparator;
@@ -68,7 +68,7 @@ Comparator compFunctor = [](std::pair<std::string, int> elem1,
 };
 //-----------------------------------------------------------------------------------------------------------------//
 //---------------------------------------------------------------classes and
-//functions begin---------------------//
+// functions begin---------------------//
 void structDump() {
   // building the structs of scope in order of depth.
   for (auto label : depthSorted) {
@@ -120,6 +120,7 @@ public:
       loc = loc.substr(loc.find(':') + 1, loc.find(':'));
       loc = loc.substr(0, loc.find(':'));
       sourceLocs[ls->getName()] = loc;
+      // llvm::errs()<<loc<<"\n";
     }
   }
   Rewriter &Rewrite;
@@ -146,6 +147,7 @@ public:
         loc = loc.substr(loc.find(':') + 1, loc.find(':'));
         loc = loc.substr(0, loc.find(':'));
         sourceLocs[fd->getNameAsString()] = loc;
+        // llvm::errs()<<loc<<"\n";
         parenChilMap[ls->getName()] = fd->getNameAsString();
         // assuming that the nodes are visited in order of depth. starting from
         // lowest depth.
@@ -255,18 +257,25 @@ public:
     if (const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("call")) {
       std::string callName =
           ce->getDirectCallee()->getNameInfo().getName().getAsString();
-      llvm::errs() << callName << "\n";
       if (std::find(labels.begin(), labels.end(), callName) != labels.end()) {
-        sourceLoc = ce->getBeginLoc();
-        // ss2<<"struct s_"<<callName<<" s"<<callName<<";\n";
-        for (auto var : scopes[callName].vars) {
-          llvm::errs() << var.first << " " << var.second << " \n";
-          //	ss2<<"s"<<callName<<"."<<var.first<<" =  &"<<var.first<<";\n";
+
+        std::string loc = ce->getBeginLoc().printToString(*sm);
+        loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+        loc = loc.substr(0, loc.find(':'));
+        if (callDepths[callName + loc] == depths[callName]) {
+          sourceLoc = ce->getBeginLoc();
+          ss2 << "struct s_" << callName << " s" << callName << ";\n";
+          for (auto var : scopes[callName].vars) {
+            // llvm::errs() << var.first << " " << var.second << " \n";
+            ss2 << "s" << callName << "." << var.first << " =  &" << var.first
+                << ";\n";
+          }
+          // llvm::errs() << ss2.str() << "\n";
+          Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
         }
-        // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
       }
-      ss2.clear();
     }
+    ss2.clear();
   }
 
 private:
@@ -333,17 +342,18 @@ public:
     // Run the matchers when we have the whole TU parsed.
     Finder.matchAST(Context);
     /*
-    for (auto loc : sourceLocs){
-        llvm::errs()<<loc.first<<" "<<loc.second<<"\n";
-   }
-    for (auto depth : depths ){
-        llvm::errs() << depth.first<<" "<<depth.second<<"\n";
-  }*/
+        for (auto loc : sourceLocs){
+            llvm::errs()<<loc.first<<" "<<loc.second<<"\n";
+       }
+        for (auto depth : depths ){
+            llvm::errs() << depth.first<<" "<<depth.second<<"\n";
+      }
+    */
     DelayedFinder.matchAST(Context);
-    /*
-    for(auto depths: callDepths){
-        llvm::errs()<<depths.first<<" "<<depths.second<<"\n";
-    }*/
+
+    //  for(auto depths: callDepths){
+    //    llvm::errs()<<depths.first<<" "<<depths.second<<"\n";
+    /// }
   }
 
 private:
@@ -378,7 +388,7 @@ public:
 };
 
 //------------------------------------------------------------------------main
-//starts--------------------------------//
+// starts--------------------------------//
 
 int main(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
