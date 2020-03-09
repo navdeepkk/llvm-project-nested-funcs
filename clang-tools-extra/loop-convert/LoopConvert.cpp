@@ -115,11 +115,11 @@ public:
     if (const LabelStmt *ls =
             Result.Nodes.getNodeAs<clang::LabelStmt>("label")) {
       // llvm::errs()<<"labelfinder"<<ls->getName()<<"\n";
-      labels.push_back(ls->getName());
       std::string loc = ls->getBeginLoc().printToString(*sm);
       loc = loc.substr(loc.find(':') + 1, loc.find(':'));
       loc = loc.substr(0, loc.find(':'));
-      sourceLocs[ls->getName()] = loc;
+      sourceLocs[ls->getName() + loc] = loc;
+      labels.push_back(ls->getName() + loc);
       // llvm::errs()<<loc<<"\n";
     }
   }
@@ -133,25 +133,33 @@ public:
     SourceManager *sm = Result.SourceManager;
     if (const LabelStmt *ls =
             Result.Nodes.getNodeAs<clang::LabelStmt>("child")) {
+      // find source loc of child
+      std::string locls = ls->getBeginLoc().printToString(*sm);
+      locls = locls.substr(locls.find(':') + 1, locls.find(':'));
+      locls = locls.substr(0, locls.find(':'));
+      // add the source loc of child into sourceLocs.
+      sourceLocs[ls->getName() + locls] = locls;
+      // if parent is a labelstmt.
       if (const LabelStmt *lp =
               Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
-        // llvm::errs()<<"case1: \n";
-        // llvm::errs()<<ls->getName()<<" "<<lp->getName();
-        parenChilMap[ls->getName()] = lp->getName();
-        depths[ls->getName()] = depths[lp->getName()] + 1;
+        // find source loc of parent.
+        std::string loclp = lp->getBeginLoc().printToString(*sm);
+        loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
+        loclp = loclp.substr(0, loclp.find(':'));
+        sourceLocs[lp->getName() + loclp] = loclp;
+        parenChilMap[ls->getName() + locls] = lp->getName() + loclp;
+        depths[ls->getName() + locls] = depths[lp->getName() + loclp] + 1;
+        // if parent is a function decl.
       } else if (const FunctionDecl *fd =
                      Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")) {
-        // llvm::errs()<<"case2: \n";
-        // llvm::errs()<<ls->getName()<<" "<<fd->getNameAsString();
-        std::string loc = fd->getBeginLoc().printToString(*sm);
-        loc = loc.substr(loc.find(':') + 1, loc.find(':'));
-        loc = loc.substr(0, loc.find(':'));
-        sourceLocs[fd->getNameAsString()] = loc;
-        // llvm::errs()<<loc<<"\n";
-        parenChilMap[ls->getName()] = fd->getNameAsString();
+        std::string loclp = fd->getBeginLoc().printToString(*sm);
+        loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
+        loclp = loclp.substr(0, loclp.find(':'));
+        sourceLocs[fd->getNameAsString() + loclp] = loclp;
+        parenChilMap[ls->getName() + locls] = fd->getNameAsString() + loclp;
         // assuming that the nodes are visited in order of depth. starting from
         // lowest depth.
-        depths[ls->getName()] = 1;
+        depths[ls->getName() + locls] = 1;
       }
     }
   }
@@ -165,24 +173,21 @@ public:
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *const sm = Result.SourceManager;
     if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("child")) {
-      // llvm::errs()<<"structBuilder\n";
       // find the appropriate parent child pair to insert it in. itereate
       // through parenChilMap and check if the source loc of the vardecl is in
       // between of parent and child.
       std::string loc = vd->getBeginLoc().printToString(*sm);
-      // llvm::errs()<<loc<<"\n";
-      loc = loc.substr(loc.find(':') + 1, loc.find(':'));
-      loc = loc.substr(0, loc.find(':'));
-      int varloc = std::stoi(loc);
-      for (auto elem : parenChilMap) {
-        // llvm::errs()<<sourceLocs[elem.first]<<"
-        // "<<sourceLocs[elem.second]<<"\n";
-        if (std::stoi(sourceLocs[elem.first]) >= varloc &&
-            varloc >= std::stoi(sourceLocs[elem.second])) {
-          // llvm::errs()<<"inserting in:"<<elem.first<<"\n";
-          scopes[elem.first].name = elem.first;
-          scopes[elem.first].vars[vd->getQualifiedNameAsString()] =
-              vd->getType().getAsString();
+      if (loc.find("invalid") == std::string::npos) {
+        loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+        loc = loc.substr(0, loc.find(':'));
+        int varloc = std::stoi(loc);
+        for (auto elem : parenChilMap) {
+          if (std::stoi(sourceLocs[elem.first]) > varloc &&
+              varloc >= std::stoi(sourceLocs[elem.second])) {
+            scopes[elem.first].name = elem.first;
+            scopes[elem.first].vars[vd->getQualifiedNameAsString()] =
+                vd->getType().getAsString();
+          }
         }
       }
     }
@@ -204,7 +209,6 @@ public:
         std::vector<std::pair<std::string, int>>(depths.begin(), depths.end());
     std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
     structDump();
-    // llvm:errs()<<ss.str();
     Rewrite.InsertText(sourceLoc, ss.str(), true, true);
   }
 
@@ -223,24 +227,27 @@ public:
             Result.Nodes.getNodeAs<clang::CallExpr>("depth1")) {
       std::string callName =
           ce->getDirectCallee()->getNameInfo().getName().getAsString();
-      if (std::find(labels.begin(), labels.end(), callName) != labels.end()) {
-        std::string loc = ce->getBeginLoc().printToString(*sm);
-        loc = loc.substr(loc.find(':') + 1, loc.find(':'));
-        loc = loc.substr(0, loc.find(':'));
+      // find the source loc to find ce + sourceloc in labels vector.
+      std::string loc = ce->getBeginLoc().printToString(*sm);
+      loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+      loc = loc.substr(0, loc.find(':'));
+      if (std::find(labels.begin(), labels.end(), callName + loc) !=
+          labels.end()) {
         callDepths[callName + loc] = 1;
       }
     } else if (const CallExpr *ce =
                    Result.Nodes.getNodeAs<clang::CallExpr>("depth")) {
       std::string callName =
           ce->getDirectCallee()->getNameInfo().getName().getAsString();
+      // find source loc to find ce + sourceloc in labels vector.
+      std::string loc = ce->getBeginLoc().printToString(*sm);
+      loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+      loc = loc.substr(0, loc.find(':'));
       if (const LabelStmt *ls =
               Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
         if (std::find(labels.begin(), labels.end(), callName) != labels.end()) {
           std::string callName =
               ce->getDirectCallee()->getNameInfo().getName().getAsString();
-          std::string loc = ce->getBeginLoc().printToString(*sm);
-          loc = loc.substr(loc.find(':') + 1, loc.find(':'));
-          loc = loc.substr(0, loc.find(':'));
           callDepths[callName + loc] = depths[ls->getName()] + 1;
         }
       }
@@ -276,11 +283,12 @@ public:
               // corresponding block.
               for (auto var : scopes[callName].vars) {
                 // llvm::errs() << var.first << " " << var.second << " \n";
-                ss2 << "s" << callName << "." << var.first << " =  &"
+                ss2 << "s" << callName << "." << var.first << " = &"
                     << var.first << ";\n";
               }
               // llvm::errs() << ss2.str() << "\n";
               Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
+              Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
               ss2.str("");
             }
           }
@@ -319,23 +327,18 @@ public:
         &labelRelBuilder);
     // for all nodes find the variables that need to be passed on into its
     // scope.
-    //  Finder.addMatcher(labelStmt(hasParent(compoundStmt().bind("parent"))).bind("child"),
-    //  &structBuilder);
-    // for all nodes find the variables that need to be passed on into its
-    // scope.
-    DelayedFinder.addMatcher(
-        varDecl(hasAncestor(functionDecl(hasName("main")))).bind("child"),
-        &structBuilder);
-    // after this call the depths will be sorted. structBuilder has a logicc to
-    // sort the depths. adding code to find the main function and rewrite
-    // something there.
+    DelayedFinder.addMatcher(varDecl(hasAncestor(functionDecl())).bind("child"),
+                             &structBuilder);
+
+    // after the call to structDumper the depths will be sorted. structDumper
+    // has a logic to sort the depths. adding code to find the main function and
+    // rewrite something there.
     DelayedFinder.addMatcher(functionDecl(hasName("main")).bind("main"),
                              &structDumper);
     // Next thing would be to find the depths of the call expressions, so
-    // appropriate redirections for variables may be provided. first finding all
-    // call at depth one.
-    DelayedFinder.addMatcher(callExpr(hasParent(compoundStmt(hasParent(
-                                          functionDecl(hasName("main"))))))
+    // appropriate redirections for variables may be provided. first finding
+    // all calls at depth one.
+    DelayedFinder.addMatcher(callExpr(hasAncestor(functionDecl()))
                                  .bind("depth1"),
                              &callDepth);
     // finding the call expressions at more depths
@@ -348,14 +351,14 @@ public:
     // of one in label statements.
     //-------------------------------------------------------------------//
     // Use delayed finder2 from this point and beyond
-    DelayedFinder2.addMatcher(
-        callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
-        &structInit);
+    // DelayedFinder2.addMatcher(
+    //    callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
+    //    &structInit);
     // have to add a new matcher to add structures and call before functions
-    // call from any function decl. to do this in the ast matcher bind the nodes
-    // parent function decl and if it is the actual parent of the label
+    // call from any function decl. to do this in the ast matcher bind the
+    // nodes parent function decl and if it is the actual parent of the label
     // corresponding to the call
-    //     DelayedFinder.addMatcher(callExpr(hasAncestor(functionDecl().bind("parent"))).bind("call2"),
+    // DelayedFinder2.addMatcher(callExpr(hasAncestor(functionDecl().bind("parent"))).bind("call"),
     //     &structInit);
   }
 
@@ -363,27 +366,57 @@ public:
     // Run the matchers when we have the whole TU parsed.
     Finder.matchAST(Context);
     /*
-        for (auto loc : sourceLocs){
-            llvm::errs()<<loc.first<<" "<<loc.second<<"\n";
-       }
-        for (auto depth : depths ){
-            llvm::errs() << depth.first<<" "<<depth.second<<"\n";
-      }
+llvm::errs() << "soucrcelocs\n";
+
+for (auto sl : sourceLocs) {
+llvm::errs() << sl.first << " " << sl.second << " ";
+}
     */
-
-    DelayedFinder.matchAST(Context);
-    for (auto label : labels) {
-      llvm::errs() << label << "\n";
-      for (auto var : scopes[label].vars) {
-        llvm::errs() << var.first << " " << var.second;
-      }
-      llvm::errs() << "\n";
+    /*
+    llvm::errs()<<"labels: \n";
+    for(auto label : labels){
+            llvm::errs()<<label<<" ";
     }
+*/ /*
+     llvm::errs() << "parenchil:\n";
+     for (auto chil : parenChilMap) {
+       llvm::errs() << chil.first << " " << chil.second << "\n";
+     }
 
-    DelayedFinder2.matchAST(Context);
-    //  for(auto depths: callDepths){
-    //    llvm::errs()<<depths.first<<" "<<depths.second<<"\n";
-    /// }
+         llvm::errs()<<"depths:\n";
+         for(auto depth: depths){
+                 llvm::errs()<<depth.first<<" "<<depth.second<<"\n";
+         }
+
+
+     for (auto loc : sourceLocs) {
+       llvm::errs() << loc.first << " " << loc.second << "\n";
+     }
+ */
+    DelayedFinder.matchAST(Context);
+    /*
+        for (auto label : labels) {
+          llvm::errs() << label << "\n";
+          for (auto var : scopes[label].vars) {
+            llvm::errs() << var.first << " " << var.second;
+          }
+          llvm::errs() << "\n";
+        }
+    */
+    /*
+     for (auto label : labels) {
+          llvm::errs() << label << "\n";
+          for (auto var : scopes[label].vars) {
+            llvm::errs() << var.first << " " << var.second;
+          }
+          llvm::errs() << "\n";
+        }
+    */
+    // DelayedFinder2.matchAST(Context);
+    llvm::errs() << "calldepths:\n";
+    for (auto depths : callDepths) {
+      llvm::errs() << depths.first << " " << depths.second << "\n";
+    }
   }
 
 private:
