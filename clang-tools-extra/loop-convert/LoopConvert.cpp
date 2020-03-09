@@ -47,6 +47,7 @@ std::unordered_map<std::string, std::string> sourceLocs;
 std::unordered_map<std::string, int> callDepths;
 
 std::vector<std::pair<std::string, int>> depthSorted;
+std::unordered_map<std::string, bool> structMade;
 
 DeclarationMatcher globalMatcher =
     varDecl(hasDeclContext(translationUnitDecl())).bind("global");
@@ -95,7 +96,6 @@ public:
   GlobalVars temp;
 
   virtual void run(const MatchFinder::MatchResult &Result) {
-    ASTContext *Context = Result.Context;
     if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("global")) {
       temp.type = vd->getType().getAsString();
       // llvm::errs()<<"globalbuilder\n";
@@ -255,27 +255,38 @@ public:
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *const sm = Result.SourceManager;
     if (const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("call")) {
-      std::string callName =
-          ce->getDirectCallee()->getNameInfo().getName().getAsString();
-      if (std::find(labels.begin(), labels.end(), callName) != labels.end()) {
-
-        std::string loc = ce->getBeginLoc().printToString(*sm);
-        loc = loc.substr(loc.find(':') + 1, loc.find(':'));
-        loc = loc.substr(0, loc.find(':'));
-        if (callDepths[callName + loc] == depths[callName]) {
-          sourceLoc = ce->getBeginLoc();
-          ss2 << "struct s_" << callName << " s" << callName << ";\n";
-          for (auto var : scopes[callName].vars) {
-            // llvm::errs() << var.first << " " << var.second << " \n";
-            ss2 << "s" << callName << "." << var.first << " =  &" << var.first
-                << ";\n";
+      if (const LabelStmt *ls =
+              Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
+        // bind the call expr and its parent label stmt.
+        std::string callName =
+            ce->getDirectCallee()->getNameInfo().getName().getAsString();
+        if (std::find(labels.begin(), labels.end(), callName) != labels.end()) {
+          if (structMade[ls->getName() + callName] == false) {
+            // if the call is of a label stmt and a struct for it has not
+            // already been initialized.
+            structMade[ls->getName() + callName] = true;
+            std::string loc = ce->getBeginLoc().printToString(*sm);
+            loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+            loc = loc.substr(0, loc.find(':'));
+            if (callDepths[callName + loc] == depths[callName]) {
+              sourceLoc = ce->getBeginLoc();
+              ss2 << "struct s_" << callName << " s" << callName << ";\n";
+              // emit all the vars in the scope of that call.
+              // add check to only emit if the var is not redefined in the
+              // corresponding block.
+              for (auto var : scopes[callName].vars) {
+                // llvm::errs() << var.first << " " << var.second << " \n";
+                ss2 << "s" << callName << "." << var.first << " =  &"
+                    << var.first << ";\n";
+              }
+              // llvm::errs() << ss2.str() << "\n";
+              Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
+              ss2.str("");
+            }
           }
-          // llvm::errs() << ss2.str() << "\n";
-          Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
         }
       }
     }
-    ss2.clear();
   }
 
 private:
@@ -332,10 +343,20 @@ public:
         callExpr(hasAncestor(labelStmt().bind("parent"))).bind("depth"),
         &callDepth);
     // now the depths are in hand the logic to initialize scope srtuctures
-    // before function calls must start.
-    DelayedFinder.addMatcher(
+    // before function calls must start. The below matcher inserts structs
+    // intializations for function calls before the functions at a depth level
+    // of one in label statements.
+    //-------------------------------------------------------------------//
+    // Use delayed finder2 from this point and beyond
+    DelayedFinder2.addMatcher(
         callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
         &structInit);
+    // have to add a new matcher to add structures and call before functions
+    // call from any function decl. to do this in the ast matcher bind the nodes
+    // parent function decl and if it is the actual parent of the label
+    // corresponding to the call
+    //     DelayedFinder.addMatcher(callExpr(hasAncestor(functionDecl().bind("parent"))).bind("call2"),
+    //     &structInit);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -349,8 +370,17 @@ public:
             llvm::errs() << depth.first<<" "<<depth.second<<"\n";
       }
     */
-    DelayedFinder.matchAST(Context);
 
+    DelayedFinder.matchAST(Context);
+    for (auto label : labels) {
+      llvm::errs() << label << "\n";
+      for (auto var : scopes[label].vars) {
+        llvm::errs() << var.first << " " << var.second;
+      }
+      llvm::errs() << "\n";
+    }
+
+    DelayedFinder2.matchAST(Context);
     //  for(auto depths: callDepths){
     //    llvm::errs()<<depths.first<<" "<<depths.second<<"\n";
     /// }
@@ -366,6 +396,7 @@ private:
   StructInit structInit;
   MatchFinder Finder;
   MatchFinder DelayedFinder;
+  MatchFinder DelayedFinder2;
 };
 //----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {
