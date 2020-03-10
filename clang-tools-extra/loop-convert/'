@@ -35,7 +35,7 @@ struct scope {
 };
 
 std::vector<GlobalVars> globalVars;
-std::vector<std::string> globalFuncDecls;
+std::vector<std::string> globalFuncDecls; 
 std::vector<std::string> labels;
 std::unordered_map<std::string, std::string> parenChilMap;
 std::unordered_map<std::string, scope> scopes;
@@ -76,8 +76,7 @@ Comparator compFunctor = [](std::pair<std::string, int> elem1,
 void structDump() {
   // building the structs of scope in order of depth.
   for (auto label : depthSorted) {
-    // run only for those functions whose depth is not zero and also
-    // parenchilmap is not empty
+		//run only for those functions whose depth is not zero and also parenchilmap is not empty
     if (label.second != 0 && !parenChilMap[label.first].empty()) {
       ss << "struct s_" << label.first << " {\n"
          << "struct s_" << parenChilMap[label.first] << " * s;\n";
@@ -235,12 +234,12 @@ public:
             Result.Nodes.getNodeAs<clang::CallExpr>("depth1")) {
       std::string callName =
           ce->getDirectCallee()->getNameInfo().getName().getAsString();
-      // llvm::errs() << "callee: " << callName << "\n";
+      llvm::errs() << "callee: " << callName << "\n";
       // find the source loc to find ce + sourceloc in labels vector.
       std::string loc = ce->getBeginLoc().printToString(*sm);
       loc = loc.substr(loc.find(':') + 1, loc.find(':'));
       loc = loc.substr(0, loc.find(':'));
-      callDepths[callName + loc] = 1;
+       callDepths[callName + loc] = 1;
     } else if (const CallExpr *ce =
                    Result.Nodes.getNodeAs<clang::CallExpr>("depth")) {
       std::string callName =
@@ -264,66 +263,28 @@ public:
 class GlobalFuncDeclFinder : public MatchFinder::MatchCallback {
 public:
   GlobalFuncDeclFinder() {}
-  virtual void run(const MatchFinder::MatchResult &Result) {
-    // llvm::errs() << "global found.\n";
+  virtual void run(const MatchFinder::MatchResult &Result) {			
     SourceManager *const sm = Result.SourceManager;
-    if (const FunctionDecl *fd =
-            Result.Nodes.getNodeAs<clang::FunctionDecl>("decl")) {
-      if (fd->isGlobal()) {
+    if (const FunctionDecl *fd = Result.Nodes.getNodeAs<clang::FunctionDecl>("decl")) {		
         globalFuncDecls.push_back(fd->getNameAsString());
-      }
-    }
-  }
+		}
+	}
 };
 //----------------------------------------------------------------------------------------------------------------//
 class CallResolver : public MatchFinder::MatchCallback {
 public:
   CallResolver() {}
-  virtual void run(const MatchFinder::MatchResult &Result) {
+  virtual void run(const MatchFinder::MatchResult &Result) {			
     SourceManager *const sm = Result.SourceManager;
     if (const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("call")) {
       if (const LabelStmt *ls =
-              Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
-        std::string callName =
-            ce->getDirectCallee()->getNameInfo().getName().getAsString();
-        std::string lsName = ls->getName();
-        // once labelstmt name is known traverse all the parents recursively to
-        // see if any labelstmt has the same name
-        // as the callexpr. if i find match then stop and the call is resolved
-        // to that label else if you reach a fucntion with depth zero then go on
-        // to check if a global function is present or not.
-        std::string lsloc = ls->getBeginLoc().printToString(*sm);
-        lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
-        lsloc = lsloc.substr(0, lsloc.find(':'));
-        llvm::errs()<<findCall(lsName + lsloc,
-                 ce->getDirectCallee()->getNameInfo().getName().getAsString())<<"\n";
-      }
-    }
-  }
-
-  std::string findCall(std::string ls, std::string target) {
-    std::string temp = ls;
-    if (depths[ls] == 0) {
-      // removes digits from the name of the label.
-      ls.erase(std::remove_if(std::begin(ls), std::end(ls),
-                              [](auto ch) { return std::isdigit(ch); }),
-               ls.end());
-      if (ls == target) {
-        // if label at depth 0 is same as call then return it.
-        return temp;
-      } else {
-        return "0";
-      }
-    } else {
-      // check if the name of the label is same as the callee.
-      ls.erase(std::remove_if(std::begin(ls), std::end(ls),
-                              [](auto ch) { return std::isdigit(ch); }),
-               ls.end());
-      if (ls == target) {
-        return temp;
-      }
-    }
-  }
+        Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {		
+				std::string callName =
+          ce->getDirectCallee()->getNameInfo().getName().getAsString();
+				
+			}
+		}
+	}
 };
 //--------------------------------------------------------------------------------------------------------------------------//
 
@@ -387,13 +348,10 @@ public:
     // find all the labelStmt and store there name in a vector of strings.
     Finder.addMatcher(labelMatcher, &labelBuilder);
     // below matcher returns all node at depth level one.
-    // Finder.addMatcher(labelStmt(hasParent(compoundStmt(
-    //                                hasParent(functionDecl().bind("parent")))))
-    //                      .bind("child"),
-    //                  &labelRelBuilder);
-    Finder.addMatcher(
-        labelStmt(hasAncestor(functionDecl().bind("parent"))).bind("child"),
-        &labelRelBuilder);
+    Finder.addMatcher(labelStmt(hasParent(compoundStmt(
+                                    hasParent(functionDecl().bind("parent")))))
+                          .bind("child"),
+                      &labelRelBuilder);
     // find the parent child relationship of label statements by matching all
     // nodes having a compound statement as parent;
     Finder.addMatcher(
@@ -405,38 +363,30 @@ public:
                              &structBuilder);
 
     // after the call to structDumper the depths will be sorted. structDumper
-    // has a logic to sort the depths. adding code to find the main function
-    // and rewrite something there.
+    // has a logic to sort the depths. adding code to find the main function and
+    // rewrite something there.
     DelayedFinder.addMatcher(functionDecl(hasName("main")).bind("main"),
                              &structDumper);
     // Next thing would be to find the depths of the call expressions, so
     // appropriate redirections for variables may be provided. first
     // finding all calls at depth one.
     DelayedFinder.addMatcher(
-        callExpr(hasAncestor(functionDecl()), argumentCountIs(0))
-            .bind("depth1"),
-        &callDepth);
+        callExpr(hasAncestor(functionDecl()), argumentCountIs(0)).bind("depth1"), &callDepth); 
     // finding the call expressions at more depths greater than .
-    DelayedFinder.addMatcher(
-        callExpr(hasAncestor(labelStmt().bind("parent")), argumentCountIs(0))
-            .bind("depth"),
+		DelayedFinder.addMatcher(
+        callExpr(hasAncestor(labelStmt().bind("parent")), argumentCountIs(0)).bind("depth"),
         &callDepth);
     // now the depths are in hand the logic to initialize scope srtuctures
     // before function calls must start. The below matcher inserts structs
     // intializations for function calls before the functions at a depth level
     // of one in label statements.
     //-------------------------------------------------------------------//
-    // going to find global decls needed for call resolution
-    DelayedFinder.addMatcher(
-        functionDecl(hasParent(translationUnitDecl())).bind("decl"),
-        &globalFuncDeclFinder);
-    // first going to resolve calls before the strutcs are emitted are being
-    // overwritten.
-    MatchCallResolver.addMatcher(
-        callExpr(hasAncestor(labelStmt().bind("parent"))).bind("parent"),
-        &callResolver);
+    //going to find global decls needed for call resolution
+    DelayedFinder.addMatcher(functionDecl(hasParent(translationUnitDecl())).bind("decl"), &globalFuncDeclFinder);
+    //first going to resolve calls before the strutcs are emitted are being overwritten.
+    MatchCallResolver.addMatcher(callExpr(hasAncestor(labelStmt().bind("parent"))).bind("child"), &callResolver);
     // Use delayed finder2 from this point and beyond
-    // DelayedFinder2.addMatcher(
+    //DelayedFinder2.addMatcher(
     //    callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
     //    &structInit);
     // have to add a new matcher to add structures and call before functions
@@ -469,7 +419,6 @@ llvm::errs() << sl.first << " " << sl.second << " ";
            llvm::errs() << chil.first << " " << chil.second << "\n";
          }
     */
-
     llvm::errs() << "depths:\n";
     for (auto depth : depths) {
       llvm::errs() << depth.first << " " << depth.second << "\n";
@@ -480,15 +429,11 @@ llvm::errs() << sl.first << " " << sl.second << " ";
            llvm::errs() << loc.first << " " << loc.second << "\n";
          }
      */
-    // llvm::errs() << "globals\n";
-    DelayedFinder.matchAST(Context);
-		MatchCallResolver.matchAST(Context);
-    /*
-                for (auto x : globalFuncDecls) {
-      llvm::errs() << x << " ";
-    }
-    llvm::errs() << "\n";
-*/
+		llvm::errs()<<;
+    DelayedFinder.matchAST(Context);	
+		for(auto x : globalFuncDecls){
+		llvm::errs()<<x<<" ";
+}
     /*
         for (auto label : labels) {
           llvm::errs() << label << "\n";
@@ -508,11 +453,10 @@ llvm::errs() << sl.first << " " << sl.second << " ";
         }
     */
     // DelayedFinder2.matchAST(Context);
-    /*
     llvm::errs() << "calldepths:\n";
-        for (auto depths : callDepths) {
-          llvm::errs() << depths.first << " " << depths.second << "\n";
-        }*/
+    for (auto depths : callDepths) {
+      llvm::errs() << depths.first << " " << depths.second << "\n";
+    }
   }
 
 private:
@@ -523,12 +467,12 @@ private:
   StructDumper structDumper;
   CallDepth callDepth;
   StructInit structInit;
-  CallResolver callResolver;
-  GlobalFuncDeclFinder globalFuncDeclFinder;
+	CallResolver callResolver;
+	GlobalFuncDeclFinder globalFuncDeclFinder;
   MatchFinder Finder;
   MatchFinder DelayedFinder;
   MatchFinder DelayedFinder2;
-  MatchFinder MatchCallResolver;
+	MatchFinder MatchCallResolver;
 };
 //----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {
@@ -542,8 +486,7 @@ public:
         .write(llvm::outs());
   }
   virtual std::unique_ptr<clang::ASTConsumer>
-  CreateASTConsumer(clang::CompilerInstance &Compiler,
-                    llvm::StringRef InFile) override {
+  CreateASTConsumer(clang::CompilerInstance &Compiler, llvm::StringRef InFile) {
     this->TheRewriter.setSourceMgr(Compiler.getSourceManager(),
                                    Compiler.getLangOpts());
     return std::unique_ptr<clang::ASTConsumer>(
