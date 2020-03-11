@@ -32,14 +32,29 @@ struct GlobalVars {
 struct scope {
   std::string name;
   std::unordered_map<std::string, std::string> vars;
+  std::unordered_map<std::string, int> locs;
+};
+
+struct bounds {
+  int begin;
+  int end;
 };
 
 std::vector<GlobalVars> globalVars;
 std::vector<std::string> globalFuncDecls;
 std::vector<std::string> labels;
 std::unordered_map<std::string, std::string> parenChilMap;
+// scopes is for the scopes that need to be passed on into the functions.
 std::unordered_map<std::string, scope> scopes;
-
+// decls is for the decalrations that are inside a function or label stmt.
+std::unordered_map<std::string, scope> decls;
+// call rels is for resolution of calls to appropriate funcitons or labels.
+std::unordered_map<std::string, std::string> callRels;
+// visited labels is for the contructions of decls. marks the parent label stmts
+// visited. in a new matcher this visited labels would not be considered.
+std::unordered_map<std::string, bool> visitedLabels;
+// labelbounds has label bounds.
+std::unordered_map<std::string, bounds> labelBounds;
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
@@ -51,7 +66,7 @@ std::vector<std::pair<std::string, int>> depthSorted;
 std::unordered_map<std::string, bool> structMade;
 // marked call depths is utility for finding call depths, marks all the calls as
 // true. so they are not processed again.
-std::unordered_map<std::string, bool> markedCallDepth;
+std::unordered_map<std::string, bool> resolvedCalls;
 DeclarationMatcher globalMatcher =
     varDecl(hasDeclContext(translationUnitDecl())).bind("global");
 StatementMatcher labelMatcher = labelStmt().bind("label");
@@ -127,6 +142,8 @@ public:
       loc = loc.substr(0, loc.find(':'));
       sourceLocs[ls->getName() + loc] = loc;
       labels.push_back(ls->getName() + loc);
+      // initialize as !visitedLabels[lsName + lsloc] as false.
+      visitedLabels[ls->getName() + loc] = false;
       // llvm::errs()<<loc<<"\n";
     }
   }
@@ -192,9 +209,20 @@ public:
         for (auto elem : parenChilMap) {
           if (std::stoi(sourceLocs[elem.first]) > varloc &&
               varloc >= std::stoi(sourceLocs[elem.second])) {
+            // inserting into scopes for child.
             scopes[elem.first].name = elem.first;
             scopes[elem.first].vars[vd->getQualifiedNameAsString()] =
                 vd->getType().getAsString();
+            scopes[elem.first].locs[vd->getQualifiedNameAsString()] = varloc;
+            // inserting into decl for the parent. usefull when re writung. not
+            // to rewrite the vars that are declared in the function.
+            // second is the parent first is child.
+            // marking the parent as true visited.
+            visitedLabels[elem.second] = true;
+            decls[elem.second].name = elem.second;
+            decls[elem.second].vars[vd->getQualifiedNameAsString()] =
+                vd->getType().getAsString();
+            decls[elem.second].locs[vd->getQualifiedNameAsString()] = varloc;
           }
         }
       }
@@ -295,38 +323,182 @@ public:
         std::string lsloc = ls->getBeginLoc().printToString(*sm);
         lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
         lsloc = lsloc.substr(0, lsloc.find(':'));
-        llvm::errs()<<findCall(lsName + lsloc,
-                 ce->getDirectCallee()->getNameInfo().getName().getAsString())<<"\n";
+        //--------------------------find loc of call-------------------//
+        std::string celoc = ce->getBeginLoc().printToString(*sm);
+        celoc = celoc.substr(celoc.find(':') + 1, celoc.find(':'));
+        celoc = celoc.substr(0, celoc.find(':'));
+        // check if there is a labestmt or functiondecl with same name as the
+        // call expr at the same depth.
+        // llvm::errs() << "helllo from call resolver\n";
+        if (resolvedCalls[callName + celoc] == false) {
+          std::string res = findCall(lsName + lsloc, callName, celoc);
+          // llvm::errs() << callName + celoc << " " << res << "\n";
+          // if 0 is returned then 2 cases are possible either the call resolves
+          // to a global thing or it resolves to a label stmt at same depth.
+          if (res.compare("0") == 0) {
+            // search in parenchilmap for the label stmt that encloses this call
+            // expression. if the label stmt has an immediate label stmt with
+            // the same name then the call will resolve to it.
+            bool flag = false;
+            for (auto elem : parenChilMap) {
+              if (elem.second.compare(lsName + lsloc) == 0) {
+                // the elem has the labelstmt as parent
+                std::string temp = elem.first;
+                // temp capture the name of child labelstmt;
+                temp.erase(remove_if(temp.begin(), temp.end(),
+                                     [](char c) { return !isalpha(c); }),
+                           temp.end());
+                if (temp.compare(callName) == 0) {
+                  resolvedCalls[callName + celoc] = true;
+                  callRels[callName + celoc] = elem.first;
+                  // llvm::errs() << callName + celoc << " " << elem.first <<
+                  // "\n";
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } else if (const FunctionDecl *fd =
+                     Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")) {
+        // if call is not resolved here also then it should be checked for
+        // global.
+        std::string callName =
+            ce->getDirectCallee()->getNameInfo().getName().getAsString();
+        std::string celoc = ce->getBeginLoc().printToString(*sm);
+        celoc = celoc.substr(celoc.find(':') + 1, celoc.find(':'));
+        celoc = celoc.substr(0, celoc.find(':'));
+
+        std::string fdName = fd->getQualifiedNameAsString();
+        std::string fdloc = fd->getBeginLoc().printToString(*sm);
+        fdloc = fdloc.substr(fdloc.find(':') + 1, fdloc.find(':'));
+        fdloc = fdloc.substr(0, fdloc.find(':'));
+        // have name for bothe fd and ce check if it is unvisited
+        if (resolvedCalls[callName + celoc] == false) {
+          std::string res = findCall(fdName + fdloc, callName, celoc);
+          // llvm::errs() << callName + celoc << " " << res << "\n";
+          // if 0 is returned then 2 cases are possible either the call resolves
+          // to a global thing or it resolves to a label stmt at same depth.
+          if (res.compare("0") == 0) {
+            // search in parenchilmap for the label stmt that encloses this call
+            // expression. if the label stmt has an immediate label stmt with
+            // the same name then the call will resolve to it.
+            //bool flag = false;
+            for (auto elem : parenChilMap) {
+              if (elem.second.compare(fdName + fdloc) == 0) {
+                // the elem has the labelstmt as parent
+                std::string temp = elem.first;
+                // temp capture the name of child labelstmt;
+                temp.erase(remove_if(temp.begin(), temp.end(),
+                                     [](char c) { return !isalpha(c); }),
+                           temp.end());
+                if (temp.compare(callName) == 0) {
+                  resolvedCalls[callName + celoc] = true;
+                  callRels[callName + celoc] = elem.first;
+                  // llvm::errs() << callName + celoc << " " << elem.first <<
+                  // "\n";
+                  break;
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
 
-  std::string findCall(std::string ls, std::string target) {
+  std::string findCall(std::string ls, std::string target, std::string celoc) {
     std::string temp = ls;
-    if (depths[ls] == 0) {
-      // removes digits from the name of the label.
-      ls.erase(std::remove_if(std::begin(ls), std::end(ls),
-                              [](auto ch) { return std::isdigit(ch); }),
-               ls.end());
-      if (ls == target) {
+    // removes digits from the name of the label.
+    ls.erase(
+        remove_if(ls.begin(), ls.end(), [](char c) { return !isalpha(c); }),
+        ls.end());
+    // check if there is matching label or functions decl at depth 1.
+    /*
+    std::string temp2;
+    for (auto depth : depths) {
+                        ///temp2 is for holding the target label name of the
+    label to compare it with the name of the call, because depths has label
+    namescombined with sourceloc. temp2 = depth.first;
+      temp2.erase(remove_if(temp2.begin(), temp2.end(),
+                            [](char c) { return !isalpha(c); }),
+                  temp2.end());
+      if (depth.second == callDepths[target + celoc] && temp2 == target) {
+        return depth.first;
+      }
+    }*/
+    if (depths[temp] == 0) {
+      if (ls.compare(target) == 0) {
         // if label at depth 0 is same as call then return it.
+        // call resolution successfull mark true.
+        resolvedCalls[target + celoc] = true;
+        callRels[target + celoc] = temp;
         return temp;
       } else {
         return "0";
       }
+    }
+    // check if the name of the label is same as the callee.
+    if (ls.compare(target) == 0) {
+      // call resolution is successfull mark true.
+      resolvedCalls[target + celoc] = true;
+      callRels[target + celoc] = temp;
+      return temp;
     } else {
-      // check if the name of the label is same as the callee.
-      ls.erase(std::remove_if(std::begin(ls), std::end(ls),
-                              [](auto ch) { return std::isdigit(ch); }),
-               ls.end());
-      if (ls == target) {
-        return temp;
-      }
+      return findCall(parenChilMap[temp], target, celoc);
     }
   }
 };
 //--------------------------------------------------------------------------------------------------------------------------//
 
+class LabelLast : public MatchFinder::MatchCallback {
+public:
+  LabelLast() {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *const sm = Result.SourceManager;
+    if (const LabelStmt *ls =
+            Result.Nodes.getNodeAs<clang::LabelStmt>("label")) {
+      std::string lsName = ls->getName();
+      std::string lsloc = ls->getBeginLoc().printToString(*sm);
+      lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
+      lsloc = lsloc.substr(0, lsloc.find(':'));
+
+      std::string lsendloc = ls->getEndLoc().printToString(*sm);
+      lsendloc = lsendloc.substr(lsendloc.find(':') + 1, lsendloc.find(':'));
+      lsendloc = lsendloc.substr(0, lsendloc.find(':'));
+
+      // llvm::errs() << lsName << " " << lsloc << " " << lsendloc << "\n";
+      labelBounds[lsName + lsloc].begin = std::stoi(lsloc);
+      labelBounds[lsName + lsloc].end = std::stoi(lsendloc);
+    }
+    if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("child")) {
+      if (const LabelStmt *ls =
+              Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
+        std::string lsName = ls->getName();
+        std::string lsloc = ls->getBeginLoc().printToString(*sm);
+        lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
+        // llvm::errs() << "hello from alstlabel\n";
+        lsloc = lsloc.substr(0, lsloc.find(':'));
+        //llvm::errs() << lsName + lsloc << " " << visitedLabels[lsName + lsloc];
+        if (!visitedLabels[lsName + lsloc]) {
+          // llvm::errs() << "yes\n";
+          std::string loc = vd->getBeginLoc().printToString(*sm);
+          loc = loc.substr(loc.find(':') + 1, loc.find(':'));
+          loc = loc.substr(0, loc.find(':'));
+          int varloc = std::stoi(loc);
+          if (labelBounds[lsName + lsloc].begin <= varloc &&
+              labelBounds[lsName + lsloc].end >= varloc) {
+            decls[lsName + lsloc].name = lsName + lsloc;
+            decls[lsName + lsloc].vars[vd->getQualifiedNameAsString()] =
+                vd->getType().getAsString();
+            decls[lsName + lsloc].locs[vd->getQualifiedNameAsString()] = varloc;
+          }
+        }
+      }
+    }
+  }
+};
+//----------------------------------------------------------------------------------------------------------------------//
 class StructInit : public MatchFinder::MatchCallback {
 public:
   StructInit(Rewriter &Rewrite) : Rewrite(Rewrite) {}
@@ -430,11 +602,25 @@ public:
     DelayedFinder.addMatcher(
         functionDecl(hasParent(translationUnitDecl())).bind("decl"),
         &globalFuncDeclFinder);
-    // first going to resolve calls before the strutcs are emitted are being
-    // overwritten.
+    // first going to resolve calls at depth greatewr than 1 before the strutcs
+    // are emitted.
     MatchCallResolver.addMatcher(
-        callExpr(hasAncestor(labelStmt().bind("parent"))).bind("parent"),
+        callExpr(hasAncestor(labelStmt().bind("parent")), argumentCountIs(0))
+            .bind("call"),
         &callResolver);
+    // resolve calls at depths 1
+    MatchCallResolver2.addMatcher(
+        callExpr(hasAncestor(functionDecl().bind("parent")), argumentCountIs(0))
+            .bind("call"),
+        &callResolver);
+    // now finding the vars in the last level label.
+    // first finding out the last label stmts. all other label stmts
+    // have been marked in some previous matcher.
+    LastLabelFinder.addMatcher(labelStmt().bind("label"), &labelLast);
+    // need to build decls for the label stmt at innermost depth.
+    LastLabelFinder.addMatcher(
+        varDecl(hasAncestor(labelStmt().bind("parent"))).bind("child"),
+        &labelLast);
     // Use delayed finder2 from this point and beyond
     // DelayedFinder2.addMatcher(
     //    callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
@@ -469,12 +655,12 @@ llvm::errs() << sl.first << " " << sl.second << " ";
            llvm::errs() << chil.first << " " << chil.second << "\n";
          }
     */
-
-    llvm::errs() << "depths:\n";
-    for (auto depth : depths) {
-      llvm::errs() << depth.first << " " << depth.second << "\n";
-    }
-
+    /*
+        llvm::errs() << "depths:\n";
+        for (auto depth : depths) {
+          llvm::errs() << depth.first << " " << depth.second << "\n";
+        }
+    */
     /*
          for (auto loc : sourceLocs) {
            llvm::errs() << loc.first << " " << loc.second << "\n";
@@ -482,22 +668,35 @@ llvm::errs() << sl.first << " " << sl.second << " ";
      */
     // llvm::errs() << "globals\n";
     DelayedFinder.matchAST(Context);
-		MatchCallResolver.matchAST(Context);
+    MatchCallResolver.matchAST(Context);
+    MatchCallResolver2.matchAST(Context);
+
+    llvm::errs() << "visitedLables\n";
+    for (auto elem : visitedLabels) {
+      llvm::errs() << elem.first << " " << elem.second << "\n";
+    }
+    LastLabelFinder.matchAST(Context);
     /*
                 for (auto x : globalFuncDecls) {
       llvm::errs() << x << " ";
     }
     llvm::errs() << "\n";
-*/
-    /*
-        for (auto label : labels) {
-          llvm::errs() << label << "\n";
-          for (auto var : scopes[label].vars) {
-            llvm::errs() << var.first << " " << var.second;
-          }
-          llvm::errs() << "\n";
-        }
-    */
+*/ /*
+         llvm::errs() << "callrels:\n";
+     for (auto rels : callRels) {
+       llvm::errs() << rels.first << " " << rels.second << "\n";
+     }
+ */
+    llvm::errs() << "decls:\n";
+    for (auto label : labels) {
+      llvm::errs() << label << "\n";
+      for (auto var : decls[label].vars) {
+        llvm::errs() << var.first << " " << var.second << " "
+                     << decls[label].locs[var.first];
+      }
+      llvm::errs() << "\n";
+    }
+
     /*
      for (auto label : labels) {
           llvm::errs() << label << "\n";
@@ -525,10 +724,13 @@ private:
   StructInit structInit;
   CallResolver callResolver;
   GlobalFuncDeclFinder globalFuncDeclFinder;
+  LabelLast labelLast;
   MatchFinder Finder;
   MatchFinder DelayedFinder;
   MatchFinder DelayedFinder2;
   MatchFinder MatchCallResolver;
+  MatchFinder MatchCallResolver2;
+  MatchFinder LastLabelFinder;
 };
 //----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {
