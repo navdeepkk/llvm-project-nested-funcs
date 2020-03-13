@@ -225,13 +225,27 @@ public:
   Rewriter &Rewrite;
 };
 //------------------------------------------------------------------------find
-//depths pf all vardecl------------//////
+// depths of all vardecl inside label statements------------//////
 
 class VarDepthFinder : public MatchFinder::MatchCallback {
 public:
   VarDepthFinder() {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *const sm = Result.SourceManager;
+    // initialize depths of all var decls as one.
+    if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("one")) {
+      std::string vdName = vd->getNameAsString();
+      // llvm::errs()<<vdName<<"\n";
+      std::string vdloc = vd->getBeginLoc().printToString(*sm);
+      // llvm::errs() << vdloc << "\n";
+      vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
+      vdloc = vdloc.substr(0, vdloc.find(':'));
+      // llvm::errs()<<vdloc<<"\n";
+      if (vdloc.find("invalid") == std::string::npos) {
+        vardecldepths[vdName + vdloc] = 1;
+      }
+    }
+    // handle vardecs in label stmts.
     if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("child")) {
       if (const LabelStmt *ls =
               Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
@@ -244,7 +258,25 @@ public:
         std::string vdloc = vd->getBeginLoc().printToString(*sm);
         vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
         vdloc = vdloc.substr(0, vdloc.find(':'));
-        vardecldepths[vdName + vdloc] = depths[lsName + lsloc] + 1;
+        if (vdloc.find("invalid") == std::string::npos) {
+          vardecldepths[vdName + vdloc] = depths[lsName + lsloc] + 1;
+        }
+      }
+    }
+    // handle vardecls at global level.
+    if (const VarDecl *vd = Result.Nodes.getNodeAs<clang::VarDecl>("child")) {
+      if (const TranslationUnitDecl *tu =
+              Result.Nodes.getNodeAs<clang::TranslationUnitDecl>("parent")) {
+
+        std::string vdName = vd->getNameAsString();
+        // llvm::errs()<<vdName<<"\n";
+        std::string vdloc = vd->getSourceRange().getBegin().printToString(*sm);
+        // llvm::errs()<<vdloc<<"\n";
+        vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
+        vdloc = vdloc.substr(0, vdloc.find(':'));
+        if (vdloc.find("invalid") == std::string::npos) {
+          vardecldepths[vdName + vdloc] = 0;
+        }
       }
     }
   }
@@ -394,7 +426,7 @@ public:
         std::string fdloc = fd->getBeginLoc().printToString(*sm);
         fdloc = fdloc.substr(fdloc.find(':') + 1, fdloc.find(':'));
         fdloc = fdloc.substr(0, fdloc.find(':'));
-        // have name for bothe fd and ce check if it is unvisited
+        // have name for both fd and ce check if it is unvisited
         if (resolvedCalls[callName + celoc] == false) {
           std::string res = findCall(fdName + fdloc, callName, celoc);
           // llvm::errs() << callName + celoc << " " << res << "\n";
@@ -403,8 +435,9 @@ public:
           if (res.compare("0") == 0) {
             // search in parenchilmap for the label stmt that encloses this call
             // expression. if the label stmt has an immediate label stmt with
-            // the same name then the call will resolve to it.
-            // bool flag = false;
+            // the same name then the call will resolve to it. else it will
+            // resolve to a global function
+            bool flag = false;
             for (auto elem : parenChilMap) {
               if (elem.second.compare(fdName + fdloc) == 0) {
                 // the elem has the labelstmt as parent
@@ -414,6 +447,7 @@ public:
                                      [](char c) { return !isalpha(c); }),
                            temp.end());
                 if (temp.compare(callName) == 0) {
+                  flag = true;
                   resolvedCalls[callName + celoc] = true;
                   callRels[callName + celoc] = elem.first;
                   // llvm::errs() << callName + celoc << " " << elem.first <<
@@ -421,6 +455,10 @@ public:
                   break;
                 }
               }
+            }
+            // if call is foudn anywhere then it resolves to the global call.
+            if (!flag) {
+              callRels[callName + celoc] = callName;
             }
           }
         }
@@ -564,11 +602,122 @@ private:
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
+class LabelRewriter : public MatchFinder::MatchCallback {
+public:
+  LabelRewriter(Rewriter &Rewrite, PrintingPolicy &pp)
+      : Rewrite(Rewrite), pp(pp) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *const sm = Result.SourceManager;
+    if (const DeclRefExpr *dr =
+            Result.Nodes.getNodeAs<clang::DeclRefExpr>("child")) {
+      if (const LabelStmt *ls =
+              Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
+        std::string lsname = ls->getName();
+        std::string locls = ls->getBeginLoc().printToString(*sm);
+        locls = locls.substr(locls.find(':') + 1, locls.find(':'));
+        locls = locls.substr(0, locls.find(':'));
+        // check in the decls structure of the label statement if a decl is
+        // present in a line number less than or equal to the given declrefexpr.
+        // if yes skip this declrexpr. if not recursively go on checking the
+        // struct scopes of the parent and so on. if found in depth less than
+        // zero then the number of drenferences is equal to the number of depth
+        // of the label stmt in which it was found minus the depth of the parent
+        // label stmt. first don't consider the declrefexpr which are funciton
+        // calls.
+        if (dr->getValueKind() != 0) {
+          // drloc is declref location in code. drname is the decl
+          // refname.
+          std::string drloc = dr->getBeginLoc().printToString(*sm);
+          drloc = drloc.substr(drloc.find(':') + 1, drloc.find(':'));
+          drloc = drloc.substr(0, drloc.find(':'));
+          std::string drname = dr->getNameInfo().getAsString();
+          std::string drtype = dr->getType().getAsString();
+          llvm::errs() << drname << " " << drloc << " " << drtype << " ";
+
+          // decloc is the location of the declaration correspondign to the use.
+          // decname is the name of the declaratrion it is referring to,
+          // although it would be the same.
+          std::string decname = dr->getFoundDecl()->getNameAsString();
+          std::string decloc =
+              dr->getFoundDecl()->getBeginLoc().printToString(*sm);
+          decloc = decloc.substr(decloc.find(':') + 1, decloc.find(':'));
+          decloc = decloc.substr(0, decloc.find(':'));
+          llvm::errs() << decname << " " << decloc << "\n";
+          // now if the depth of the decalration is zero then nothing is to be
+          // done.
+          if (vardecldepths[decname + decloc] == 0) {
+            // do nothing. global var used.
+          }
+          // if depth of the vardecl is same as the depth of use(use has depth
+          // of labelstmt +1) and the declaration is before use then no need to
+          // rewrite again.
+          else if (vardecldepths[decname + decloc] ==
+                       depths[lsname + locls] + 1 &&
+                   stoi(decloc) <= stoi(drloc)) {
+            // do nothing definition of declref is present in the block itself.
+          }
+          // if depth is less than the depth of the use then it is possibly from
+          // some other struct. rewrite to add depthuse - depthdecl dereferences
+          // on the struct.
+          else if (vardecldepths[decname + decloc] <
+                   depths[lsname + locls] + 1) {
+            // first find the difference in depths;
+            int diff =
+                depths[lsname + locls] + 1 - vardecldepths[decname + decloc];
+            // now indirections are to be handeled according to the dtype of the
+            // of the variable.
+            stringstream ss;
+            // add appropriate dereferences in the string.
+            // handeling first for integers and floats.
+            if (drtype.compare("int") == 0 || drtype.compare("float") == 0) {
+              ss << "*(";
+              for (int i = 0; i < diff; i++) {
+                ss << "s->";
+              }
+              Rewrite.InsertTextBefore(dr->getBeginLoc(), ss.str());
+							Rewrite.InsertTextAfter(dr->getEndLoc(), ")");
+              ss.str("");
+            }
+            // if it is a array of integers.
+            else if (drtype.find("int [") != std::string::npos) {
+              // check the dimensionality of the array.
+              int dims = std::count(drtype.begin(), drtype.end(), '[');
+              if (dims == 1) {
+                // find the index of the access
+                // drloc =
+                //    drloc.substr(drloc.find(':') + 1, drloc.find(':'));
+                //drloc =
+                drloc.substr(0, drloc.find(':'));
+                int i = std::stoi(
+                    drtype.substr(drtype.find('[') + 1, drtype.find(']')));
+                ss << "*";
+                for (int i = 0; i < diff; i++) {
+                  ss << "s->";
+                }
+                ss << "*("
+                   << Rewrite.InsertTextBefore(dr->getBeginLoc(), ss.str());
+                ss.str("");
+              }
+            } else if (drtype.find("float [") != std::string::npos) {
+              // check the dims of array.
+              int dims = std::count(drtype.begin(), drtype.end(), '[');
+            }
+          }
+        }
+      }
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+  PrintingPolicy &pp;
+};
+//-------------------------------------------------------------------------------------------------------------------------//
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R)
+  MyASTConsumer(Rewriter &R, PrintingPolicy &pp)
       : globalBuilder(R), structDumper(R), labelRelBuilder(R), labelBuilder(R),
-        structBuilder(R), callDepth(), structInit(R) {
+        structBuilder(R), callDepth(), structInit(R), labelRewriter(R, pp) {
     // all code from main goes here.
     // Find all the globals and labelStmt first.
     // Find all the globals and store them in struct with type and identfier.
@@ -635,12 +784,24 @@ public:
         varDecl(hasAncestor(labelStmt().bind("parent"))).bind("child"),
         &labelLast);
     // finding depths for vardecls to prune from structures.
+    VarDepthFinder.addMatcher(varDecl().bind("one"), &varDepthFinder);
+    // for decls within labels
     VarDepthFinder.addMatcher(
         varDecl(hasAncestor(labelStmt().bind("parent"))).bind("child"),
+        &varDepthFinder);
+    // for decls at global level
+    VarDepthFinder.addMatcher(
+        varDecl(hasDeclContext(translationUnitDecl().bind("parent")))
+            .bind("child"),
         &varDepthFinder);
     // now dump the structures they will be right.
     MainDumpFinder.addMatcher(functionDecl(hasName("main")).bind("main"),
                               &structDumper);
+    // rewitrefinder will try to find all the vardecl and try to get  replace
+    // text at appropriate places.
+    RewriteFinder.addMatcher(
+        declRefExpr(hasAncestor(labelStmt().bind("parent"))).bind("child"),
+        &labelRewriter);
     // Use delayed finder2 from this point and beyond
     // after the call to structDumper the depths will be sorted. structDumper
     // has a logic to sort the depths. adding code to find the main function
@@ -725,32 +886,33 @@ llvm::errs() << sl.first << " " << sl.second << " ";
     }
     //---------------------------------------------------------------------------------------------------------------//
     MainDumpFinder.matchAST(Context);
+    RewriteFinder.matchAST(Context);
     /*
-                    llvm::errs()<<"vardepths\n";
-                    for(auto depth: vardecldepths){
-                            llvm::errs()<<depth.first<<" "<<depth.second<<"\n";
-                    }
-                    for (auto x : globalFuncDecls) {
-          llvm::errs() << x << " ";
+        llvm::errs() << "vardepths\n";
+        or (auto depth : vardecldepths) {
+          llvm::errs() << depth.first << " " << depth.second << "\n";
         }
-        llvm::errs() << "\n";
-
-        llvm::errs() << "callrels:\n";
-        for (auto rels : callRels) {
-          llvm::errs() << rels.first << " " << rels.second << "\n";
-        }
-
-        llvm::errs() << "decls:\n";
-        for (auto label : labels) {
-          llvm::errs() << label << "\n";
-          for (auto var : decls[label].vars) {
-            llvm::errs() << var.first << " " << var.second << " "
-                         << decls[label].locs[var.first];
-          }
-          llvm::errs() << "\n";
-        }
-
     */
+    for (auto x : globalFuncDecls) {
+      llvm::errs() << x << " ";
+    }
+    llvm::errs() << "\n";
+    llvm::errs() << "callrels:\n";
+    for (auto rels : callRels) {
+      llvm::errs() << rels.first << " " << rels.second << "\n";
+    }
+    /*
+                llvm::errs() << "decls:\n";
+                for (auto label : labels) {
+                  llvm::errs() << label << "\n";
+                  for (auto var : decls[label].vars) {
+                    llvm::errs() << var.first << " " << var.second << " "
+                                 << decls[label].locs[var.first];
+                  }
+                  llvm::errs() << "\n";
+                }
+
+            */
 
     /*
      for (auto label : labels) {
@@ -762,11 +924,11 @@ llvm::errs() << sl.first << " " << sl.second << " ";
         }
     */
     // DelayedFinder2.matchAST(Context);
-    /*
+
     llvm::errs() << "calldepths:\n";
-        for (auto depths : callDepths) {
-          llvm::errs() << depths.first << " " << depths.second << "\n";
-        }*/
+    for (auto depths : callDepths) {
+      llvm::errs() << depths.first << " " << depths.second << "\n";
+    }
   }
 
 private:
@@ -781,6 +943,7 @@ private:
   GlobalFuncDeclFinder globalFuncDeclFinder;
   LabelLast labelLast;
   VarDepthFinder varDepthFinder;
+  LabelRewriter labelRewriter;
   MatchFinder Finder;
   MatchFinder MainDumpFinder;
   MatchFinder DelayedFinder;
@@ -789,6 +952,7 @@ private:
   MatchFinder MatchCallResolver2;
   MatchFinder LastLabelFinder;
   MatchFinder VarDepthFinder;
+  MatchFinder RewriteFinder;
 };
 //----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {
@@ -806,8 +970,9 @@ public:
                     llvm::StringRef InFile) override {
     this->TheRewriter.setSourceMgr(Compiler.getSourceManager(),
                                    Compiler.getLangOpts());
+    PrintingPolicy printingPolicy(Compiler.getLangOpts());
     return std::unique_ptr<clang::ASTConsumer>(
-        new MyASTConsumer(this->TheRewriter));
+        new MyASTConsumer(this->TheRewriter, printingPolicy));
   }
 };
 
