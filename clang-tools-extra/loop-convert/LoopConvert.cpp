@@ -3,8 +3,10 @@
 #include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchFinder.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchers.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/SourceManager.h"
+#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/TokenKinds.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/CompilerInstance.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/FrontendActions.h"
+#include "/home/navdeep/work/projects/llvm-install/include/clang/Lex/Lexer.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Rewrite/Core/Rewriter.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/CommonOptionsParser.h"
 #include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Refactoring.h"
@@ -95,14 +97,17 @@ void structDump() {
     // run only for those functions whose depth is not zero and also
     // parenchilmap is not empty
     if (label.second != 0 && !parenChilMap[label.first].empty()) {
-      ss << "struct s_" << label.first << " {\n"
-         << "struct s_" << parenChilMap[label.first] << " * s;\n";
+      ss << "struct s_" << label.first << " {\n";
+      // add only if the depth of the parent is grater than 0.
+      if (depths[parenChilMap[label.first]] != 0) {
+        ss << "struct s_" << parenChilMap[label.first] << " *s;\n";
+      }
       for (auto var : scopes[label.first].vars) {
         // currently not adding any functionality to handle or structs any
         // differently.
         if (var.second.find('[') != std::string::npos) {
           ss << var.second.substr(0, var.second.find(' ')) << "* " << var.first
-             << ":\n";
+             << ";\n";
         } else {
           ss << var.second << "* " << var.first << ";\n";
           ;
@@ -298,7 +303,7 @@ public:
         std::vector<std::pair<std::string, int>>(depths.begin(), depths.end());
     std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
     structDump();
-    Rewrite.InsertText(sourceLoc, ss.str(), true, true);
+    Rewrite.InsertTextBefore(sourceLoc, ss.str());
   }
 
 private:
@@ -565,28 +570,174 @@ public:
         // bind the call expr and its parent label stmt.
         std::string callName =
             ce->getDirectCallee()->getNameInfo().getName().getAsString();
-        if (std::find(labels.begin(), labels.end(), callName) != labels.end()) {
+        std::string callLoc = ce->getBeginLoc().printToString(*sm);
+        callLoc = callLoc.substr(callLoc.find(':') + 1, callLoc.find(':'));
+        callLoc = callLoc.substr(0, callLoc.find(':'));
+        // rewrite only those calls which are to label stmt.
+        // callrels can be used here.
+        if (callRels.find(callName + callLoc) != callRels.end()) {
+          // if multiple call in a label stmt then only one call is to be
+          // preceded by a structure definition.
           if (structMade[ls->getName() + callName] == false) {
+            llvm::errs() << "entered init;\n";
             // if the call is of a label stmt and a struct for it has not
             // already been initialized.
             structMade[ls->getName() + callName] = true;
-            std::string loc = ce->getBeginLoc().printToString(*sm);
-            loc = loc.substr(loc.find(':') + 1, loc.find(':'));
-            loc = loc.substr(0, loc.find(':'));
-            if (callDepths[callName + loc] == depths[callName]) {
-              sourceLoc = ce->getBeginLoc();
-              ss2 << "struct s_" << callName << " s" << callName << ";\n";
+            // find loc of labelstatement to hash into depths.
+            std::string lsloc = ls->getBeginLoc().printToString(*sm);
+            lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
+            lsloc = lsloc.substr(0, lsloc.find(':'));
+            // only those call are required to have the structs initialized
+            // which are at depth of there parent.
+            llvm::errs() << callDepths[callName + callLoc] << " "
+                         << depths[callName + lsloc] << "\n";
+            // checking if the depths of the call and the label statement it
+            // refers to is same.
+            if (callDepths[callName + callLoc] ==
+                depths[callRels[callName + callLoc]]) {
+              llvm::errs() << "inside final:\n";
+              // sourceLoc = ce->getBeginLoc();
+              ss2 << "struct s_" << callRels[callName + callLoc] << " s"
+                  << callRels[callName + callLoc] << ";\n";
               // emit all the vars in the scope of that call.
               // add check to only emit if the var is not redefined in the
               // corresponding block.
-              for (auto var : scopes[callName].vars) {
+              // the above comment is old and i have added the check to this
+              // in the block when the variables are being rewritten in the
+              // corresponding block.
+              // the parent structure is also to be passed it is not in the
+              // scopes struct it needs to be added manually.
+              ss2 << "s" << callRels[callName + callLoc] << ".s = s;\n";
+
+              for (auto var : scopes[callRels[callName + callLoc]].vars) {
                 // llvm::errs() << var.first << " " << var.second << " \n";
-                ss2 << "s" << callName << "." << var.first << " = &"
-                    << var.first << ";\n";
+                ss2 << "s" << callRels[callName + callLoc] << "." << var.first
+                    << " = &" << var.first << ";\n";
               }
               // llvm::errs() << ss2.str() << "\n";
-              Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
-              Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
+              ss2 << callRels[callName + callLoc] << "(&s"
+                  << callRels[callName + callLoc] << ")";
+              Rewrite.ReplaceText(ce->getSourceRange(), ss2.str());
+              // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
+              // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
+              ss2.str("");
+            }
+            // case when the depths are not same. only the cases which are valid
+            // are the ones in which the calls are at depth greater than the
+            // label they are referring to.
+            else {
+              // find the depth difference between the call and the label it
+              // refers to
+              ss2 << callRels[callName + callLoc] << "(";
+              int diff = callDepths[callName + callLoc] -
+                         depths[callRels[callName + callLoc]];
+              if (diff == 1) {
+                // if difference is equal to one then just pass 's'.
+                ss2 << "s";
+              } else { // else when difference is not equal to one the pass a
+                       // string.
+                for (int i = 0; i < diff; i++) {
+                  if (diff - i == 1) {
+                    ss2 << "s";
+                  } else {
+                    ss2 << "s->";
+                  }
+                }
+              }
+              ss2 << ")";
+              Rewrite.ReplaceText(ce->getSourceRange(), ss2.str());
+              // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
+              ss2.str("");
+            }
+          }
+        }
+      }
+    }
+
+    if (const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("call")) {
+      if (const FunctionDecl *fd =
+              Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")) {
+        std::string callName =
+            ce->getDirectCallee()->getNameInfo().getName().getAsString();
+        std::string callLoc = ce->getBeginLoc().printToString(*sm);
+        callLoc = callLoc.substr(callLoc.find(':') + 1, callLoc.find(':'));
+        callLoc = callLoc.substr(0, callLoc.find(':'));
+        // rewrite only those calls which are to label stmt.
+        // callrels can be used here.
+        if (callRels.find(callName + callLoc) != callRels.end()) {
+          // if multiple call in a label stmt then only one call is to be
+          // preceded by a structure definition.
+          if (structMade[fd->getNameAsString() + callName] == false) {
+            llvm::errs() << "entered init;\n";
+            // if the call is of a label stmt and a struct for it has not
+            // already been initialized.
+            structMade[fd->getNameAsString() + callName] = true;
+            // find loc of labelstatement to hash into depths.
+            std::string fdloc = fd->getBeginLoc().printToString(*sm);
+            fdloc = fdloc.substr(fdloc.find(':') + 1, fdloc.find(':'));
+            fdloc = fdloc.substr(0, fdloc.find(':'));
+            // only those call are required to have the structs initialized
+            // which are at depth of there parent.i
+            // only those call are required to have the structs initialized
+            // which are at depth of there parent.
+            llvm::errs() << callDepths[callName + callLoc] << " "
+                         << depths[callName + fdloc] << "\n";
+            // checking if the depths of the call and the label statement it
+            // refers to is same.
+            if (callDepths[callName + callLoc] ==
+                depths[callRels[callName + callLoc]]) {
+              llvm::errs() << "inside final:\n";
+              // sourceLoc = ce->getBeginLoc();
+              ss2 << "struct s_" << callRels[callName + callLoc] << " s"
+                  << callRels[callName + callLoc] << ";\n";
+              // emit all the vars in the scope of that call.
+              // add check to only emit if the var is not redefined in the
+              // corresponding block.
+              // the above comment is old and i have added the check to this
+              // in the block when the variables are being rewritten in the
+              // corresponding block.
+              // the parent structure is also to be passed it is not in the
+              // scopes struct it needs to be added manually.
+              ss2 << "s" << callRels[callName + callLoc] << ".s = s;\n";
+
+              for (auto var : scopes[callRels[callName + callLoc]].vars) {
+                // llvm::errs() << var.first << " " << var.second << " \n";
+                ss2 << "s" << callRels[callName + callLoc] << "." << var.first
+                    << " = &" << var.first << ";\n";
+              }
+              // llvm::errs() << ss2.str() << "\n";
+              ss2 << callRels[callName + callLoc] << "(&s"
+                  << callRels[callName + callLoc] << ")";
+              Rewrite.ReplaceText(ce->getSourceRange(), ss2.str());
+              // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
+              // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
+              ss2.str("");
+            }
+            // case when the depths are not same. only the cases which are valid
+            // are the ones in which the calls are at depth greater than the
+            // label they are referring to.
+            else {
+              // find the depth difference between the call and the label it
+              // refers to
+              ss2 << callRels[callName + callLoc] << "(";
+              int diff = callDepths[callName + callLoc] -
+                         depths[callRels[callName + callLoc]];
+              if (diff == 1) {
+                // if difference is equal to one then just pass 's'.
+                ss2 << "s";
+              } else { // else when difference is not equal to one the pass a
+                       // string.
+                for (int i = 0; i < diff; i++) {
+                  if (diff - i == 1) {
+                    ss2 << "s";
+                  } else {
+                    ss2 << "s->";
+                  }
+                }
+              }
+              ss2 << ")";
+              Rewrite.ReplaceText(ce->getSourceRange(), ss2.str());
+              // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
               ss2.str("");
             }
           }
@@ -666,42 +817,43 @@ public:
                 depths[lsname + locls] + 1 - vardecldepths[decname + decloc];
             // now indirections are to be handeled according to the dtype of the
             // of the variable.
+            llvm::errs() << drname << " " << drname.length() << "\n";
             stringstream ss;
             // add appropriate dereferences in the string.
             // handeling first for integers and floats.
             if (drtype.compare("int") == 0 || drtype.compare("float") == 0) {
-              ss << "*(";
+              ss << "(*(";
               for (int i = 0; i < diff; i++) {
                 ss << "s->";
               }
               Rewrite.InsertTextBefore(dr->getBeginLoc(), ss.str());
-							Rewrite.InsertTextAfter(dr->getEndLoc(), ")");
+              Rewrite.InsertTextAfterToken(dr->getBeginLoc(), "))");
               ss.str("");
             }
-            // if it is a array of integers.
-            else if (drtype.find("int [") != std::string::npos) {
+            // if it is a array.
+            else {
               // check the dimensionality of the array.
               int dims = std::count(drtype.begin(), drtype.end(), '[');
               if (dims == 1) {
                 // find the index of the access
                 // drloc =
                 //    drloc.substr(drloc.find(':') + 1, drloc.find(':'));
-                //drloc =
+                // drloc =
                 drloc.substr(0, drloc.find(':'));
-                int i = std::stoi(
-                    drtype.substr(drtype.find('[') + 1, drtype.find(']')));
-                ss << "*";
+                std::string i =
+                    drtype.substr(drtype.find('[') + 1, drtype.find(']'));
+                ss << "(";
                 for (int i = 0; i < diff; i++) {
                   ss << "s->";
                 }
-                ss << "*("
-                   << Rewrite.InsertTextBefore(dr->getBeginLoc(), ss.str());
+                // Rewrite.ReplaceText(dr->getBeginLoc(), ss.str());
+                Rewrite.InsertTextAfterToken(dr->getEndLoc(), ss.str());
                 ss.str("");
               }
-            } else if (drtype.find("float [") != std::string::npos) {
-              // check the dims of array.
-              int dims = std::count(drtype.begin(), drtype.end(), '[');
-            }
+            } /* else if (drtype.find("float [") != std::string::npos) {
+               // check the dims of array.
+               int dims = std::count(drtype.begin(), drtype.end(), '[');
+             }*/
           }
         }
       }
@@ -712,6 +864,15 @@ private:
   Rewriter &Rewrite;
   PrintingPolicy &pp;
 };
+//------------------------------------------------------------------------------------------------------------//
+class LabelRenamer : public MatchFinder::MatchCallback {
+public:
+  LabelRenamer(Rewriter &Rewrite)
+      : Rewrite(Rewrite) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *const sm = Result.SourceManager;
+}
+}
 //-------------------------------------------------------------------------------------------------------------------------//
 class MyASTConsumer : public ASTConsumer {
 public:
@@ -794,27 +955,29 @@ public:
         varDecl(hasDeclContext(translationUnitDecl().bind("parent")))
             .bind("child"),
         &varDepthFinder);
-    // now dump the structures they will be right.
-    MainDumpFinder.addMatcher(functionDecl(hasName("main")).bind("main"),
-                              &structDumper);
     // rewitrefinder will try to find all the vardecl and try to get  replace
     // text at appropriate places.
     RewriteFinder.addMatcher(
         declRefExpr(hasAncestor(labelStmt().bind("parent"))).bind("child"),
         &labelRewriter);
-    // Use delayed finder2 from this point and beyond
+    // Use delayedfinder2 from this point and beyond
     // after the call to structDumper the depths will be sorted. structDumper
     // has a logic to sort the depths. adding code to find the main function
     // and rewrite something there.
-    // DelayedFinder2.addMatcher(
-    //    callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
-    //    &structInit);
+    // first the calls at depths greater than one have there structs intitalized
+    // then the ones at depth one.
+    DelayedFinder2.addMatcher(
+        callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
+        &structInit);
+    // now dump the structures they will be right.
+    MainDumpFinder.addMatcher(functionDecl().bind("main"), &structDumper);
     // have to add a new matcher to add structures and call before functions
     // call from any function decl. to do this in the ast matcher bind the
     // nodes parent function decl and if it is the actual parent of the label
-    // corresponding to the call
-    // DelayedFinder2.addMatcher(callExpr(hasAncestor(functionDecl().bind("parent"))).bind("call"),
-    //     &structInit);
+    // corresponding to the call.
+    DelayedFinder2.addMatcher(
+        callExpr(hasAncestor(functionDecl().bind("parent"))).bind("call"),
+        &structInit);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -839,12 +1002,7 @@ llvm::errs() << sl.first << " " << sl.second << " ";
            llvm::errs() << chil.first << " " << chil.second << "\n";
          }
     */
-    /*
-        llvm::errs() << "depths:\n";
-        for (auto depth : depths) {
-          llvm::errs() << depth.first << " " << depth.second << "\n";
-        }
-    */
+
     /*
          for (auto loc : sourceLocs) {
            llvm::errs() << loc.first << " " << loc.second << "\n";
@@ -854,17 +1012,22 @@ llvm::errs() << sl.first << " " << sl.second << " ";
     DelayedFinder.matchAST(Context);
     MatchCallResolver.matchAST(Context);
     MatchCallResolver2.matchAST(Context);
-    /*
-        llvm::errs() << "visitedLables\n";
-        for (auto elem : visitedLabels) {
-          llvm::errs() << elem.first << " " << elem.second << "\n";
-        }
+    llvm::errs() << "depths:\n";
+    for (auto depth : depths) {
+      llvm::errs() << depth.first << " " << depth.second << "\n";
+    }
 
-            llvm::errs() << "depths:\n";
-            for (auto depth : depths) {
-              llvm::errs() << depth.first << " " << depth.second << "\n";
-            }
-    */
+    /*
+          llvm::errs() << "visitedLables\n";
+          for (auto elem : visitedLabels) {
+            llvm::errs() << elem.first << " " << elem.second << "\n";
+          }
+
+              llvm::errs() << "depths:\n";
+              for (auto depth : depths) {
+                llvm::errs() << depth.first << " " << depth.second << "\n";
+              }
+      */
 
     LastLabelFinder.matchAST(Context);
     VarDepthFinder.matchAST(Context);
@@ -885,7 +1048,6 @@ llvm::errs() << sl.first << " " << sl.second << " ";
       toRemove.clear();
     }
     //---------------------------------------------------------------------------------------------------------------//
-    MainDumpFinder.matchAST(Context);
     RewriteFinder.matchAST(Context);
     /*
         llvm::errs() << "vardepths\n";
@@ -893,9 +1055,10 @@ llvm::errs() << sl.first << " " << sl.second << " ";
           llvm::errs() << depth.first << " " << depth.second << "\n";
         }
     */
-    for (auto x : globalFuncDecls) {
-      llvm::errs() << x << " ";
-    }
+    /*
+for (auto x : globalFuncDecls) {
+llvm::errs() << x << " ";
+}*/
     llvm::errs() << "\n";
     llvm::errs() << "callrels:\n";
     for (auto rels : callRels) {
@@ -914,17 +1077,17 @@ llvm::errs() << sl.first << " " << sl.second << " ";
 
             */
 
-    /*
-     for (auto label : labels) {
-          llvm::errs() << label << "\n";
-          for (auto var : scopes[label].vars) {
-            llvm::errs() << var.first << " " << var.second;
-          }
-          llvm::errs() << "\n";
-        }
-    */
-    // DelayedFinder2.matchAST(Context);
+    for (auto label : labels) {
+      llvm::errs() << label << "\n";
+      for (auto var : scopes[label].vars) {
+        llvm::errs() << var.first << " " << var.second;
+      }
+      llvm::errs() << "\n";
+    }
 
+    DelayedFinder2.matchAST(Context);
+    // dump the structtures.
+    // MainDumpFinder.matchAST(Context);
     llvm::errs() << "calldepths:\n";
     for (auto depths : callDepths) {
       llvm::errs() << depths.first << " " << depths.second << "\n";
