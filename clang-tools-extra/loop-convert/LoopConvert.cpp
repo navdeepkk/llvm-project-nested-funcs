@@ -127,7 +127,7 @@ void structDump() {
     ss << "void " << label << "( "
        << "struct s_" << label << "*);\n";
   }
-  cout << ss.str();
+  // cout << ss.str();
 }
 //-------------------------------------------------------------------------------------------------------------//
 void eraseAllSubStr(std::string &mainStr, std::string &toErase) {
@@ -315,9 +315,10 @@ class StructDumper : public MatchFinder::MatchCallback {
 public:
   StructDumper(Rewriter &Rewrite) : Rewrite(Rewrite) {}
   virtual void run(const MatchFinder::MatchResult &Result) {
-    if (const FunctionDecl *fd =
-            Result.Nodes.getNodeAs<clang::FunctionDecl>("main")) {
-      sourceLoc = fd->getBeginLoc();
+    if (const TranslationUnitDecl *tu =
+            Result.Nodes.getNodeAs<clang::TranslationUnitDecl>("main")) {
+      sourceLoc = tu->getASTContext().getSourceManager().getLocForStartOfFile(
+          tu->getASTContext().getSourceManager().getMainFileID());
     }
   }
   virtual void onEndOfTranslationUnit() {
@@ -325,7 +326,7 @@ public:
         std::vector<std::pair<std::string, int>>(depths.begin(), depths.end());
     std::sort(depthSorted.begin(), depthSorted.end(), compFunctor);
     structDump();
-    // Rewrite.InsertTextBefore(sourceLoc, ss.str());
+    Rewrite.InsertTextBefore(sourceLoc, ss.str());
   }
 
 private:
@@ -907,7 +908,29 @@ public:
       std::string locls = ls->getBeginLoc().printToString(*sm);
       locls = locls.substr(locls.find(':') + 1, locls.find(':'));
       locls = locls.substr(0, locls.find(':'));
-      Rewrite.InsertTextAfterToken(ls->getBeginLoc(), locls);
+      Rewrite.ReplaceText(ls->getBeginLoc(), lsname + locls + "( struct s_" +
+                                                 lsname + locls + "* s )");
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
+//------------------------------------------------------------------------------------------------------------//
+class LabelRemover : public MatchFinder::MatchCallback {
+public:
+  LabelRemover(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *const sm = Result.SourceManager;
+    if (const LabelStmt *ls =
+            Result.Nodes.getNodeAs<clang::LabelStmt>("stmt")) {
+      std::string lsname = ls->getName();
+      std::string locls = ls->getBeginLoc().printToString(*sm);
+      locls = locls.substr(locls.find(':') + 1, locls.find(':'));
+      locls = locls.substr(0, locls.find(':'));
+      if (depths[lsname + locls] == 1) {
+        Rewrite.ReplaceText(ls->getSourceRange(), "\n");
+      }
     }
   }
 
@@ -939,7 +962,7 @@ public:
             Rewrite.getRewrittenText(ls->getSourceRange());
         rewrittenBodiesFin[ls->getName() + locls] =
             Rewrite.getRewrittenText(ls->getSourceRange());
-        //cout << Rewrite.getRewrittenText(ls->getSourceRange()) << "\n";
+        // cout << Rewrite.getRewrittenText(ls->getSourceRange()) << "\n";
         // if parent is a function decl.
       } else if (const FunctionDecl *fd =
                      Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")) {
@@ -952,11 +975,35 @@ public:
             Rewrite.getRewrittenText(ls->getSourceRange());
         rewrittenBodiesFin[ls->getName() + locls] =
             Rewrite.getRewrittenText(ls->getSourceRange());
-        //cout << Rewrite.getRewrittenText(ls->getSourceRange()) << "\n";
+        // cout << Rewrite.getRewrittenText(ls->getSourceRange()) << "\n";
       }
     }
   }
   Rewriter &Rewrite;
+};
+//---------------------------------------------------------------------------------------------------------------------------//
+class FunctionDumper : public MatchFinder::MatchCallback {
+public:
+  FunctionDumper(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    if (const TranslationUnitDecl *tu =
+            Result.Nodes.getNodeAs<clang::TranslationUnitDecl>("main")) {
+      sourceLoc = tu->getASTContext().getSourceManager().getLocForEndOfFile(
+          tu->getASTContext().getSourceManager().getMainFileID());
+    }
+  }
+  virtual void onEndOfTranslationUnit() {
+    stringstream ss;
+    ss << "\n\n";
+    for (auto label : labels) {
+      ss << rewrittenBodiesFin[label] << "\n\n";
+    }
+    Rewrite.InsertTextBefore(sourceLoc, ss.str());
+  }
+
+private:
+  Rewriter &Rewrite;
+  SourceLocation sourceLoc;
 };
 //-------------------------------------------------------------------------------------------------------------------------//
 class MyASTConsumer : public ASTConsumer {
@@ -964,7 +1011,7 @@ public:
   MyASTConsumer(Rewriter &R, PrintingPolicy &pp)
       : globalBuilder(R), structDumper(R), labelRelBuilder(R), labelBuilder(R),
         structBuilder(R), callDepth(), structInit(R), labelRewriter(R, pp),
-        labelRenamer(R), labelHoist(R) {
+        labelRenamer(R), labelHoist(R), labelRemover(R), functionDumper(R) {
     // all code from main goes here.
     // Find all the globals and labelStmt first.
     // Find all the globals and store them in struct with type and identfier.
@@ -1056,7 +1103,7 @@ public:
         callExpr(hasAncestor(labelStmt().bind("parent"))).bind("call"),
         &structInit);
     // now dump the structures they will be right.
-    MainDumpFinder.addMatcher(functionDecl(hasName("main")).bind("main"),
+    MainDumpFinder.addMatcher(translationUnitDecl().bind("main"),
                               &structDumper);
     // have to add a new matcher to add structures and call before functions
     // call from any function decl. to do this in the ast matcher bind the
@@ -1065,7 +1112,7 @@ public:
     DelayedFinder3.addMatcher(
         callExpr(hasAncestor(functionDecl().bind("parent"))).bind("call"),
         &structInit);
-    // renmae label statements./
+    // renmae label statements.
     LabelRenameFinder.addMatcher(labelStmt().bind("stmt"), &labelRenamer);
     // label hoisting begins
     LabelHoistFinder.addMatcher(
@@ -1074,6 +1121,10 @@ public:
     LabelHoistFinder.addMatcher(
         labelStmt(hasAncestor(labelStmt().bind("parent"))).bind("child"),
         &labelHoist);
+    // remove label stmts from the code.
+    LabelRemoveFinder.addMatcher(labelStmt().bind("stmt"), &labelRemover);
+    FunctionDumpFinder.addMatcher(translationUnitDecl().bind("main"),
+                                  &functionDumper);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
@@ -1187,31 +1238,47 @@ llvm::errs() << rels.first << " " << rels.second << "\n";
     DelayedFinder2.matchAST(Context);
     DelayedFinder3.matchAST(Context);
 
-    // dump the structtures.
+    //----------------------------------------------------- dump the
+    // structtures.
     MainDumpFinder.matchAST(Context);
     /*    llvm::errs() << "calldepths:\n";
 
        for (auto depths : callDepths) {
           llvm::errs() << depths.first << " " << depths.second << "\n";
         }*/
-    // rename all the label statements.
+    //----------------------------------------------------- rename all the label
+    // statements.
     LabelRenameFinder.matchAST(Context);
     LabelHoistFinder.matchAST(Context);
-    // now we can trim down the strings in random order.
+    //-----------------------------------------now we can trim down the strings
+    // in random order.
     for (auto label : labels) {
       for (auto elem : parenChilMap) {
         if (label == elem.second) {
           // match found, do trimming of strings.
           size_t pos =
               rewrittenBodiesFin[elem.second].find(rewrittenBodies[elem.first]);
-          rewrittenBodiesFin[label].erase(pos, rewrittenBodies[elem.first].length());
+          rewrittenBodiesFin[label].erase(pos,
+                                          rewrittenBodies[elem.first].length());
         }
       }
     }
-    // print out the trimmed bodies.
+    // now the trimming of the strings has been done then we can go on to modify
+    // teh strings to chang the starting of the labels to be as of that a
+    // funtion. removing colon form the body of the functions.
     for (auto label : labels) {
-      cout << label << ": " << rewrittenBodiesFin[label] << "\n";
+      size_t pos = rewrittenBodiesFin[label].find(":");
+      rewrittenBodiesFin[label].erase(pos, 1);
     }
+    // print out the trimmed bodies.
+    // for (auto label : labels) {
+    //  cout << label << ": " << rewrittenBodiesFin[label] << "\n";
+    //}
+    // the label stmts acan now be removed form the bodies of the functions.
+    // only the label stmts those are at depth 1should be removed.
+    LabelRemoveFinder.matchAST(Context);
+    // dump funciton at the end of the file.
+    FunctionDumpFinder.matchAST(Context);
   }
 
 private:
@@ -1229,6 +1296,8 @@ private:
   LabelRewriter labelRewriter;
   LabelRenamer labelRenamer;
   LabelHoist labelHoist;
+  LabelRemover labelRemover;
+  FunctionDumper functionDumper;
   MatchFinder Finder;
   MatchFinder MainDumpFinder;
   MatchFinder DelayedFinder;
@@ -1241,6 +1310,8 @@ private:
   MatchFinder RewriteFinder;
   MatchFinder LabelRenameFinder;
   MatchFinder LabelHoistFinder;
+  MatchFinder LabelRemoveFinder;
+  MatchFinder FunctionDumpFinder;
 };
 //----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {
@@ -1249,9 +1320,9 @@ public:
   Rewriter TheRewriter;
 
   void EndSourceFileAction() override {
-    // this->TheRewriter
-    //  .getEditBuffer(this->TheRewriter.getSourceMgr().getMainFileID())
-    //  .write(llvm::outs());
+    this->TheRewriter
+        .getEditBuffer(this->TheRewriter.getSourceMgr().getMainFileID())
+        .write(llvm::outs());
   }
   virtual std::unique_ptr<clang::ASTConsumer>
   CreateASTConsumer(clang::CompilerInstance &Compiler,
