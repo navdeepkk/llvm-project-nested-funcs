@@ -1,3 +1,7 @@
+//intended output
+//4 3 2 1 0
+
+
 #include<stdio.h>
 
 void main(){

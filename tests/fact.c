@@ -1,7 +1,10 @@
+//intended output
+//first change b to the number of which factorial is calculated
+//output: factorial of that number
+
 #include <stdio.h>
 
 int main() {
-int a;
 foo : {
   int b = 5;
   int res = 1;

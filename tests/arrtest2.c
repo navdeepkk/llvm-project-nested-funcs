@@ -1,3 +1,8 @@
+// expected output : 
+// a[5] = 7 0 9 0 0
+// a[3] = 0 0 3
+// or garbage values in place of 0
+
 #include<stdio.h>
 
 
@@ -43,7 +48,3 @@ int main()
 }
 
 
-// expected output : 
-// a[5] = 7 0 9 0 0
-// a[3] = 0 0 3
-// or garbage values in place of 0

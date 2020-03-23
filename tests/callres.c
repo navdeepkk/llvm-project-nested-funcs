@@ -1,25 +1,22 @@
+//intended output
+//In foebar
+
 #include<stdio.h>
-
-
-void foo(){
-	int x;	
-}
 
 int a;
 
 void bar(){
 	int a;
 	foebar:{
-		int y;
+		printf("In foebar!!!\n");
 	}
 
 	foe:{
 	int y, x;
 	foo:{
 		foobar:{
-			a;
+			a;								
 			x = x + 1;
-			foobar();
 			foebar();		
 			}
 			foobar();
@@ -30,6 +27,7 @@ foe();
 }
 
 
-void main(){
-foo();
+int main(){
+bar();
+return 0;
 }

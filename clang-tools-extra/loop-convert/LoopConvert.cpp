@@ -115,7 +115,7 @@ void structDump() {
         // currently not adding any functionality to handle or structs any
         // differently.
         if (var.second.find('[') != std::string::npos) {
-          ss << var.second.substr(0, var.second.find(' ')) << "* " << var.first
+          ss << var.second.substr(0, var.second.find('[')) << "* " << var.first
              << ";\n";
         } else {
           ss << var.second << "* " << var.first << ";\n";
@@ -245,7 +245,7 @@ public:
             scopes[elem.first].name = elem.first;
             scopes[elem.first].vars[vd->getQualifiedNameAsString()] =
                 vd->getType().getAsString();
-            // cout<<vd->getType().getAsString()<<"\n";
+             //cout<<vd->getType().getAsString()<<"\n";
             scopes[elem.first].locs[vd->getQualifiedNameAsString()] = varloc;
             visitedLabels[elem.second] = true;
           }
@@ -971,8 +971,13 @@ public:
                 for (int i = 0; i < diff; i++) {
                     arrows << "__s->";
                 }
-							 ss2 << "s" << callRels[callName + callLoc]+callLoc << ".__s = "<<arrows.str()<<"__s;\n";
-              // add the variables in scope to ss2.
+							//inserting structure initialization first.
+							//add this line only if the depth of the resolved call is
+							//greater than 1;
+							if(depths[callRels[callName + callLoc]] > 1){
+								ss2 << "s" << callRels[callName + callLoc]+callLoc << ".__s = "<<arrows.str()<<"__s;\n";
+              }
+							// add the variables in scope to ss2.
               for (auto var : scopes[callRels[callName + callLoc]].vars) {
                 // llvm::errs() << var.first << " " << var.second << " \n";
                 ss2 << "s" << callRels[callName + callLoc] + callLoc << "."
@@ -1189,7 +1194,7 @@ public:
             // add appropriate dereferences in the string.
             // handeling first for integers and floats.
             if (drtype.compare("int") == 0 || drtype.compare("float") == 0 ||
-                (drtype.find("struct") != std::string::npos)) {
+                (drtype.find("struct") != std::string::npos && drtype.find("[") == std::string::npos)) {
               ss << "(*(";
               for (int i = 0; i < diff; i++) {
                 ss << "__s->";

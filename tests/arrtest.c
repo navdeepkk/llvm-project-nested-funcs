@@ -1,3 +1,6 @@
+//intended output
+//5 5 5 5 5
+
 #include<stdio.h>
 
 int main(){

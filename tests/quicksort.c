@@ -1,3 +1,6 @@
+//intended output
+//the array items should be sorted
+
 #include<stdio.h>
 
 void sort () {
