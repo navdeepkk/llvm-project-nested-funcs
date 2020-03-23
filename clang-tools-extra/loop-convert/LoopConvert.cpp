@@ -62,7 +62,10 @@ std::unordered_map<std::string, bounds> labelBounds;
 // stmt.
 std::unordered_map<std::string, std::string> rewrittenBodies;
 std::unordered_map<std::string, std::string> rewrittenBodiesFin;
-
+// specialCalls is a vector which contains some calls which must be handeled
+// spcially.
+std::vector<std::string> specialCalls;
+std::vector<std::string> specialLabels;
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
@@ -421,7 +424,9 @@ public:
             // search in parenchilmap for the label stmt that encloses this call
             // expression. if the label stmt has an immediate label stmt with
             // the same name then the call will resolve to it.
-            bool flag = false;
+            // also one case wass missing before here. if the call is to
+            // a lable staatement that is at the same depth as the parent and
+            // has source location less than it.
             for (auto elem : parenChilMap) {
               if (elem.second.compare(lsName + lsloc) == 0) {
                 // the elem has the labelstmt as parent
@@ -438,7 +443,34 @@ public:
                   break;
                 }
               }
-            }
+            } /*
+             // checking for the missing case. find the parent of the label stmt
+             // which is a paren tof the label stmt.
+             // check for all the label stmt with the same parent. if the name
+             of
+             // the label stmt is the same as of the call expr and
+             sourcelocation
+             // is less than the call then match found.
+             for (auto label : labels) {
+               if (parenChilMap[label].compare(parenChilMap[lsName + lsloc]) ==
+                   0) {
+                 // parent of both the labels is same check if the source loc is
+                 // less than the call expr and also its name is same as
+                 // callexpr.
+                 std::string temp = label;
+                 temp.erase(remove_if(temp.begin(), temp.end(),
+                                      [](char c) { return !isalpha(c); }),
+                            temp.end());
+                 if (temp.compare(callName) == 0) {
+                   // the names are also same. check for location now
+                   if (labelBounds[lsName + lsloc].begin <= stoi(celoc)) {
+                     // yeah matching call found.
+                     resolvedCalls[callName + celoc] = true;
+                     callRels[callName + celoc] = label;
+                   }
+                 }
+               }
+             }*/
           }
         }
       } else if (const FunctionDecl *fd =
@@ -517,7 +549,7 @@ public:
     }*/
     if (depths[temp] == 0) {
       if (ls.compare(target) == 0) {
-        // if label at depth 0 is same as call then return it.
+        // if label or functiondecl at depth 0 is same as call then return it.
         // call resolution successfull mark true.
         resolvedCalls[target + celoc] = true;
         callRels[target + celoc] = temp;
@@ -533,6 +565,38 @@ public:
       callRels[target + celoc] = temp;
       return temp;
     } else {
+      // checking for the missing case. find the parent of the label stmt
+      // which is a paren tof the label stmt.
+      // check for all the label stmt with the same parent. if the name of
+      // the label stmt is the same as of the call expr and sourcelocation
+      // is less than the call then match found.
+      for (auto label : labels) {
+        // ls is the parent of the callexpr. and label is any label.
+        if (parenChilMap[label].compare(parenChilMap[temp]) == 0) {
+          // parent of both the labels is same check if the source loc is
+          // less than the call expr and also its name is same as
+          // callexpr.
+          std::string tempLabel = label;
+          tempLabel.erase(remove_if(tempLabel.begin(), tempLabel.end(),
+                               [](char c) { return !isalpha(c); }),
+                     tempLabel.end());
+          if (tempLabel.compare(target) == 0) {
+            // the names are also same. check for location now
+            if (labelBounds[ls].begin <= stoi(celoc)) {
+              // yeah matching call found.
+              resolvedCalls[target + celoc] = true;
+              callRels[target + celoc] = label;
+              specialCalls.push_back(target + celoc);
+              specialLabels.push_back(label);
+							//cout<<"specialCall:"<<target + celoc;
+							//cout<<"special label:"<<label<<"\n";
+              return label;
+            }
+          }
+        }
+      }
+      // if nothing found in the children of the parent of the label stmt
+      // then go on to the next parent.
       return findCall(parenChilMap[temp], target, celoc);
     }
   }
@@ -796,31 +860,35 @@ public:
       std::string lsloc = ls->getBeginLoc().printToString(*sm);
       lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
       lsloc = lsloc.substr(0, lsloc.find(':'));
-      // start bulding string stream to insert structures.
-      ss2 << "struct s_" << ls->getName() + lsloc << " s"
-          << ls->getName() + lsloc << ";\n";
-      // emit all the vars in the scope of that call.
-      // add check to only emit if the var is not redefined in the
-      // corresponding block.
-      // the above comment is old and i have added the check to this
-      // in the block when the variables are being rewritten in the
-      // corresponding block.
-      // the parent structure is also to be passed it is not in the
-      // scopes struct it needs to be added manually.
-      if (depths[ls->getName() + lsloc] != 1) {
-        ss2 << "s" << ls->getName() + lsloc << ".__s = __s;\n";
-      }
-      for (auto var : scopes[ls->getName() + lsloc].vars) {
-        // llvm::errs() << var.first << " " << var.second << " \n";
-        ss2 << "s" << ls->getName() + lsloc << "." << var.first << " = &"
-            << var.first << ";\n";
-      }
-      // llvm::errs() << ss2.str() << "\n";
-      ss2 << ls->getName() + lsloc;
-      Rewrite.ReplaceText(ls->getBeginLoc(), ss2.str());
-      // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
-      // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
-      ss2.str("");
+      // start bulding string stream to insert structures ifthe label does not
+      // resolve to a special call.
+			//if (find(specialLabels.begin(), specialLabels.end(),
+      //         ls->getName() + lsloc) == specialLabels.end()) {
+        ss2 << "struct s_" << ls->getName() + lsloc << " s"
+            << ls->getName() + lsloc << ";\n";
+        // emit all the vars in the scope of that call.
+        // add check to only emit if the var is not redefined in the
+        // corresponding block.
+        // the above comment is old and i have added the check to this
+        // in the block when the variables are being rewritten in the
+        // corresponding block.
+        // the parent structure is also to be passed it is not in the
+        // scopes struct it needs to be added manually.
+        if (depths[ls->getName() + lsloc] != 1) {
+          ss2 << "s" << ls->getName() + lsloc << ".__s = __s;\n";
+        }
+        for (auto var : scopes[ls->getName() + lsloc].vars) {
+          // llvm::errs() << var.first << " " << var.second << " \n";
+          ss2 << "s" << ls->getName() + lsloc << "." << var.first << " = &"
+              << var.first << ";\n";
+        }
+        // llvm::errs() << ss2.str() << "\n";
+        ss2 << ls->getName() + lsloc;
+        Rewrite.ReplaceText(ls->getBeginLoc(), ss2.str());
+        // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
+        // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
+        ss2.str("");
+      //}
     }
 
     if (const CallExpr *ce = Result.Nodes.getNodeAs<clang::CallExpr>("call")) {
@@ -888,25 +956,54 @@ public:
           // are the ones in which the calls are at depth greater than the
           // label they are referring to.
           else {
+            // if it is a special call then handle differrently and add the
+            // logic to dump structs before the call and also modify the call in
+            // a different way.
+            if (find(specialCalls.begin(), specialCalls.end(),
+                     callName + callLoc) != specialCalls.end()) {
+              ss2 << "struct s_" << callRels[callName + callLoc]
+                  << " s" << callRels[callName + callLoc] + callLoc << ";\n";
+              stringstream arrows;
+              int diff = callDepths[callName + callLoc] -
+                         depths[callRels[callName + callLoc]];
+							 // add diff number of arrows. the depth is surely more than the 
+							 // call in special case.
+                for (int i = 0; i < diff; i++) {
+                    arrows << "__s->";
+                }
+							 ss2 << "s" << callRels[callName + callLoc]+callLoc << ".__s = "<<arrows.str()<<"__s;\n";
+              // add the variables in scope to ss2.
+              for (auto var : scopes[callRels[callName + callLoc]].vars) {
+                // llvm::errs() << var.first << " " << var.second << " \n";
+                ss2 << "s" << callRels[callName + callLoc] + callLoc << "."
+                    << var.first << " = " << arrows.str() + var.first << ";\n";
+              }
+              // Now variables are initialized put in the call
+              ss2 << callRels[callName + callLoc] << "(&s"
+                  << callRels[callName + callLoc] + callLoc << ")";
+              arrows.str("");
+            }
             // find the depth difference between the call and the label it
-            // refers to
-            ss2 << callRels[callName + callLoc] << "(";
-            int diff = callDepths[callName + callLoc] -
-                       depths[callRels[callName + callLoc]];
-            if (diff == 1) {
-              // if difference is equal to one then just pass 's'.
-              ss2 << "__s";
-            } else { // else when difference is not equal to one the pass a
-                     // string.
-              for (int i = 0; i < diff; i++) {
-                if (diff - i == 1) {
-                  ss2 << "__s";
-                } else {
-                  ss2 << "__s->";
+            // refers to.
+            else {
+              ss2 << callRels[callName + callLoc] << "(";
+              int diff = callDepths[callName + callLoc] -
+                         depths[callRels[callName + callLoc]];
+              if (diff == 1) {
+                // if difference is equal to one then just pass '__s'.
+                ss2 << "__s";
+              } else { // else when difference is not equal to one the pass a
+                       // string.
+                for (int i = 0; i < diff; i++) {
+                  if (diff - i == 1) {
+                    ss2 << "__s";
+                  } else {
+                    ss2 << "__s->";
+                  }
                 }
               }
+              ss2 << ")";
             }
-            ss2 << ")";
             Rewrite.ReplaceText(ce->getSourceRange(), ss2.str());
             // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
             ss2.str("");
@@ -1052,7 +1149,7 @@ public:
           drloc = drloc.substr(0, drloc.find(':'));
           std::string drname = dr->getNameInfo().getAsString();
           std::string drtype = dr->getType().getAsString();
-          //llvm::errs() << drname << " " << drloc << " " << drtype << " ";
+          // llvm::errs() << drname << " " << drloc << " " << drtype << " ";
 
           // decloc is the location of the declaration correspondign to the use.
           // decname is the name of the declaratrion it is referring to,
@@ -1062,7 +1159,7 @@ public:
               dr->getFoundDecl()->getBeginLoc().printToString(*sm);
           decloc = decloc.substr(decloc.find(':') + 1, decloc.find(':'));
           decloc = decloc.substr(0, decloc.find(':'));
-          //llvm::errs() << decname << " " << decloc
+          // llvm::errs() << decname << " " << decloc
           //             << vardecldepths[decname + decloc] << "\n";
           // now if the depth of the decalration is zero then nothing is to be
           // done.
@@ -1492,16 +1589,16 @@ llvm::errs() << rels.first << " " << rels.second << "\n";
                 }
 
             */
-/*
-    cout << "scopes\n";
-    for (auto label : labels) {
-      llvm::errs() << label << "\n";
-      for (auto var : scopes[label].vars) {
-        llvm::errs() << var.first << " " << var.second;
-      }
-      llvm::errs() << "\n";
-    }
-*/
+    /*
+        cout << "scopes\n";
+        for (auto label : labels) {
+          llvm::errs() << label << "\n";
+          for (auto var : scopes[label].vars) {
+            llvm::errs() << var.first << " " << var.second;
+          }
+          llvm::errs() << "\n";
+        }
+    */
     DelayedFinder2.matchAST(Context);
     DelayedFinder3.matchAST(Context);
 

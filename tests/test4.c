@@ -1,13 +1,12 @@
-//#include<stdio.h>
-
 int main(){
-	{
-		static int x;
-}
+	foo:{
+		bar:{
 
-{
-	static int x;
-	
-}
+		}
+		foe:{
+			bar();
+		}
+
+	}
 return 0;
 }
