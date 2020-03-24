@@ -1,45 +1,50 @@
-struct s_quickSort7 {
+struct s_quickSort11 {
 int* last;
 int* first;
-int* items;
+int * items;
 int* size;
 };
 
-struct s_partition16 {
-struct s_quickSort7 *__s;
+struct s_partition21 {
+struct s_quickSort11 *__s;
 int* p;
 int* pivotIndex;
 int* q;
 };
 
-struct s_swap9 {
-struct s_quickSort7 *__s;
+struct s_swap13 {
+struct s_quickSort11 *__s;
 int* q;
 int* p;
 };
 
-void quickSort7( struct s_quickSort7*);
-void swap9( struct s_swap9*);
-void partition16( struct s_partition16*);
+void quickSort11( struct s_quickSort11*);
+void swap13( struct s_swap13*);
+void partition21( struct s_partition21*);
+//intended output
+//the array items should be sorted
+
 #include<stdio.h>
 
 void sort () {
-		int items[] = {5, 4, 3, 2, 1};
-		int size = 5;
+		int items[] = {34432,5,43,345,23,4,45,4,31,343,434,43,345};
+		int size = sizeof(items)/sizeof(int);
+		
 		int first, last;
-    struct s_quickSort7 squickSort7;
-squickSort7.last = &last;
-squickSort7.first = &first;
-squickSort7.items = &items;
-squickSort7.size = &size;
+    struct s_quickSort11 squickSort11;
+squickSort11.last = &last;
+squickSort11.first = &first;
+squickSort11.items = &items;
+squickSort11.size = &size;
 
 
 		first = 0; 
 		last = size - 1;
-    quickSort7(&squickSort7);
+		//printf("calling qsort with %d %d\n", first, last);
+    quickSort11(&squickSort11);
 
 		int i;
-		for(int i = 0; i < size; i++){
+		for(i = 0; i < size; i++){
 				printf("%d ", items[i]);
 		}
 		printf("\n");
@@ -51,64 +56,67 @@ int main(){
 }
 
 
-void quickSort7( struct s_quickSort7* __s ) {
+void quickSort11( struct s_quickSort11* __s ) {
 				int p, q;
-        struct s_swap9 sswap9;
-sswap9.__s = __s;
-sswap9.q = &q;
-sswap9.p = &p;
+        struct s_swap13 sswap13;
+sswap13.__s = __s;
+sswap13.q = &q;
+sswap13.p = &p;
 
 
 				int pivotIndex; 
-        struct s_partition16 spartition16;
-spartition16.__s = __s;
-spartition16.p = &p;
-spartition16.pivotIndex = &pivotIndex;
-spartition16.q = &q;
+        struct s_partition21 spartition21;
+spartition21.__s = __s;
+spartition21.p = &p;
+spartition21.pivotIndex = &pivotIndex;
+spartition21.q = &q;
 
 
         if ((*(__s->first)) < (*(__s->last))) {
-            partition16(&spartition16);
+            partition21(&spartition21);
+						int temp = (*(__s->last));
 						(*(__s->last)) = pivotIndex - 1;
-            quickSort7(__s);
-						(*(__s->first)) = pivotIndex + 1; 
-            quickSort7(__s);
+						//printf("calling qsort with %d %d\n", first, last);
+            quickSort11(__s);
+						(*(__s->first)) = pivotIndex + 1;
+						(*(__s->last)) = temp;
+						//printf("calling qsort with %d %d\n", first, last);
+            quickSort11(__s);
         }
     }
 
-void swap9( struct s_swap9* __s ) {
+void swap13( struct s_swap13* __s ) {
+						//printf("swapping %d %d\n", p, q);
             int tmp = (__s->__s->items)[(*(__s->p))];
             (__s->__s->items)[(*(__s->p))] = (__s->__s->items)[(*(__s->q))];
             (__s->__s->items)[(*(__s->q))] = tmp;
         }
 
-void partition16( struct s_partition16* __s ) {
-            int pivot = (__s->__s->items)[(*(__s->__s->first))], index = (*(__s->__s->first));
-            (*(__s->p)) = index;
-						(*(__s->q)) = (*(__s->__s->last));
-						struct s_swap9 sswap920;
-sswap920.__s = __s->__s;
-sswap920.q = __s->q;
-sswap920.p = __s->p;
-swap9(&sswap920);
+void partition21( struct s_partition21* __s ) {
+            int pivot = (__s->__s->items)[(*(__s->__s->last))], index = (*(__s->__s->first));
+            //p = index;
+						//q = last;
+						//swap();
 						int i;
-            for (i = (*(__s->__s->first)); i < (*(__s->__s->last)); i++)
-                if ((__s->__s->items)[i] < pivot){
+            for (i = (*(__s->__s->first)); i < (*(__s->__s->last)); i++){
+                if ((__s->__s->items)[i] <= pivot){
 										(*(__s->p)) = index++;
 										(*(__s->q)) = i;
-                    struct s_swap9 sswap926;
-sswap926.__s = __s->__s;
-sswap926.q = __s->q;
-sswap926.p = __s->p;
-swap9(&sswap926);
+                    struct s_swap13 sswap1331;
+sswap1331.__s = __s->__s;
+sswap1331.q = __s->q;
+sswap1331.p = __s->p;
+swap13(&sswap1331);
 									}
+						}
 						(*(__s->p)) = index;	
 						(*(__s->q)) = (*(__s->__s->last));
-            struct s_swap9 sswap930;
-sswap930.__s = __s->__s;
-sswap930.q = __s->q;
-sswap930.p = __s->p;
-swap9(&sswap930);
+            struct s_swap13 sswap1336;
+sswap1336.__s = __s->__s;
+sswap1336.q = __s->q;
+sswap1336.p = __s->p;
+swap13(&sswap1336);
+						//printf("pivotIndex is %d\n", index);
 						(*(__s->pivotIndex)) = index;
         }
 

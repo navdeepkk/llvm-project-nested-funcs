@@ -1,14 +1,19 @@
-struct s_foo10 {
+struct s_foo15 {
 int* b;
-int* a;
+int * a;
 };
 
-struct s_fun18 {
-struct s_foo10 *__s;
+struct s_fun23 {
+struct s_foo15 *__s;
 };
 
-void foo10( struct s_foo10*);
-void fun18( struct s_fun18*);
+void foo15( struct s_foo15*);
+void fun23( struct s_fun23*);
+// expected output : 
+// a[5] = 7 0 9 0 0
+// a[3] = 0 0 3
+// or garbage values in place of 0
+
 #include<stdio.h>
 
 
@@ -18,12 +23,12 @@ int main()
 	int a[5];
 	int b = 0;
 
-	struct s_foo10 sfoo10;
-sfoo10.b = &b;
-sfoo10.a = &a;
+	struct s_foo15 sfoo15;
+sfoo15.b = &b;
+sfoo15.a = &a;
 
 
-	foo10(&sfoo10);
+	foo15(&sfoo15);
 /*verification*/
 	printf("a[5] = ");
 	for(int i = 0;i<5;i++)
@@ -36,13 +41,9 @@ sfoo10.a = &a;
 }
 
 
-// expected output : 
-// a[5] = 7 0 9 0 0
-// a[3] = 0 0 3
-// or garbage values in place of 0
 
 
-void foo10( struct s_foo10* __s ){
+void foo15( struct s_foo15* __s ){
 		(__s->a)[0] = 7;
 
 		if((*(__s->b))==1) // i.e. if called by fun
@@ -50,23 +51,23 @@ void foo10( struct s_foo10* __s ){
 			(__s->a)[2] = 9;
 		}
 		
-		struct s_fun18 sfun18;
-sfun18.__s = __s;
+		struct s_fun23 sfun23;
+sfun23.__s = __s;
 
 		
 		if((*(__s->b))==0) //i.e. if called by main
 		{
-			fun18(&sfun18);
+			fun23(&sfun23);
 		}
 
 	     }
 
-void fun18( struct s_fun18* __s ){
+void fun23( struct s_fun23* __s ){
 			int a[3];
 			
 			a[2] = 3;
 			(*(__s->__s->b)) = 1;
-			foo10(__s->__s);
+			foo15(__s->__s);
 			
   		     }
 

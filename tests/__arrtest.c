@@ -1,33 +1,36 @@
-struct s_foo7 {
+struct s_foo10 {
 int* i;
-int* a;
+int * a;
 int* ij;
 };
 
-void foo7( struct s_foo7*);
+void foo10( struct s_foo10*);
+//intended output
+//5 5 5 5 5
+
 #include<stdio.h>
 
 int main(){
         int a[10][10];
 				int ij;
 				int i;
-        struct s_foo7 sfoo7;
-sfoo7.i = &i;
-sfoo7.a = &a;
-sfoo7.ij = &ij;
+        struct s_foo10 sfoo10;
+sfoo10.i = &i;
+sfoo10.a = &a;
+sfoo10.ij = &ij;
 
 
 i = 0;
-foo7(&sfoo7);
+foo10(&sfoo10);
 
 i = 1;
-foo7(&sfoo7);
+foo10(&sfoo10);
 
         return 0;
 }
 
 
-void foo7( struct s_foo7* __s ){
+void foo10( struct s_foo10* __s ){
 							if((*(__s->i)) == 0){
                 for((*(__s->ij)) = 0; (*(__s->ij)) < 5; (*(__s->ij))++){
                         (__s->a)[(*(__s->ij)) * 10 + (*(__s->ij))] = 5;

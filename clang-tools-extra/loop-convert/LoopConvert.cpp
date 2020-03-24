@@ -1193,8 +1193,8 @@ public:
             stringstream ss;
             // add appropriate dereferences in the string.
             // handeling first for integers and floats.
-            if (drtype.compare("int") == 0 || drtype.compare("float") == 0 ||
-                (drtype.find("struct") != std::string::npos && drtype.find("[") == std::string::npos)) {
+            if ((drtype.find("int") != std::string::npos || drtype.find("float") != std::string::npos ||
+                drtype.find("struct") != std::string::npos )&& drtype.find("[") == std::string::npos) {
               ss << "(*(";
               for (int i = 0; i < diff; i++) {
                 ss << "__s->";
