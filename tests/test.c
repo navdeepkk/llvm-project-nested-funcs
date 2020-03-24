@@ -1,4 +1,4 @@
-#include<stdio.h>
+//#include<stdio.h>
 
 /*
 struct point{
@@ -21,9 +21,9 @@ int main(){
 	foo();
 	return 0;
 }
-
-
 */
+
+/*
 int y = 5;
 int main(){
 	label:{
@@ -39,4 +39,35 @@ int main(){
 	label();
 	return 0;
 }
+*/
+
+	struct point{
+		int x,y;
+	};
+int main(){
+	struct point{
+		int x,y;
+	};
+
+		struct point p1;
+	label:{
+	}
+
+return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -245,7 +245,11 @@ public:
             scopes[elem.first].name = elem.first;
             scopes[elem.first].vars[vd->getQualifiedNameAsString()] =
                 vd->getType().getAsString();
-             //cout<<vd->getType().getAsString()<<"\n";
+            cout<<vd->getQualifierLoc().getBeginLoc().printToString(*sm)<<"\n";
+						cout<<vd->getUnderlyingDecl()->getBeginLoc().printToString(*sm)<<"\n";
+						cout<<vd->getDefinition()->Decl::getBeginLoc().printToString(*sm)<<"\n";
+						cout<<vd->getTypeSourceInfo()->getTypeLoc().getBeginLoc().printToString(*sm)<<"\n";
+						cout<<vd->getTypeSpecStartLoc().printToString(*sm)<<"\n";
             scopes[elem.first].locs[vd->getQualifiedNameAsString()] = varloc;
             visitedLabels[elem.second] = true;
           }
@@ -578,8 +582,8 @@ public:
           // callexpr.
           std::string tempLabel = label;
           tempLabel.erase(remove_if(tempLabel.begin(), tempLabel.end(),
-                               [](char c) { return !isalpha(c); }),
-                     tempLabel.end());
+                                    [](char c) { return !isalpha(c); }),
+                          tempLabel.end());
           if (tempLabel.compare(target) == 0) {
             // the names are also same. check for location now
             if (labelBounds[ls].begin <= stoi(celoc)) {
@@ -588,8 +592,8 @@ public:
               callRels[target + celoc] = label;
               specialCalls.push_back(target + celoc);
               specialLabels.push_back(label);
-							//cout<<"specialCall:"<<target + celoc;
-							//cout<<"special label:"<<label<<"\n";
+              // cout<<"specialCall:"<<target + celoc;
+              // cout<<"special label:"<<label<<"\n";
               return label;
             }
           }
@@ -862,32 +866,32 @@ public:
       lsloc = lsloc.substr(0, lsloc.find(':'));
       // start bulding string stream to insert structures ifthe label does not
       // resolve to a special call.
-			//if (find(specialLabels.begin(), specialLabels.end(),
+      // if (find(specialLabels.begin(), specialLabels.end(),
       //         ls->getName() + lsloc) == specialLabels.end()) {
-        ss2 << "struct s_" << ls->getName() + lsloc << " s"
-            << ls->getName() + lsloc << ";\n";
-        // emit all the vars in the scope of that call.
-        // add check to only emit if the var is not redefined in the
-        // corresponding block.
-        // the above comment is old and i have added the check to this
-        // in the block when the variables are being rewritten in the
-        // corresponding block.
-        // the parent structure is also to be passed it is not in the
-        // scopes struct it needs to be added manually.
-        if (depths[ls->getName() + lsloc] != 1) {
-          ss2 << "s" << ls->getName() + lsloc << ".__s = __s;\n";
-        }
-        for (auto var : scopes[ls->getName() + lsloc].vars) {
-          // llvm::errs() << var.first << " " << var.second << " \n";
-          ss2 << "s" << ls->getName() + lsloc << "." << var.first << " = &"
-              << var.first << ";\n";
-        }
-        // llvm::errs() << ss2.str() << "\n";
-        ss2 << ls->getName() + lsloc;
-        Rewrite.ReplaceText(ls->getBeginLoc(), ss2.str());
-        // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
-        // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
-        ss2.str("");
+      ss2 << "struct s_" << ls->getName() + lsloc << " s"
+          << ls->getName() + lsloc << ";\n";
+      // emit all the vars in the scope of that call.
+      // add check to only emit if the var is not redefined in the
+      // corresponding block.
+      // the above comment is old and i have added the check to this
+      // in the block when the variables are being rewritten in the
+      // corresponding block.
+      // the parent structure is also to be passed it is not in the
+      // scopes struct it needs to be added manually.
+      if (depths[ls->getName() + lsloc] != 1) {
+        ss2 << "s" << ls->getName() + lsloc << ".__s = __s;\n";
+      }
+      for (auto var : scopes[ls->getName() + lsloc].vars) {
+        // llvm::errs() << var.first << " " << var.second << " \n";
+        ss2 << "s" << ls->getName() + lsloc << "." << var.first << " = &"
+            << var.first << ";\n";
+      }
+      // llvm::errs() << ss2.str() << "\n";
+      ss2 << ls->getName() + lsloc;
+      Rewrite.ReplaceText(ls->getBeginLoc(), ss2.str());
+      // Rewrite.InsertText(sourceLoc, ss2.str(), true, true);
+      // Rewrite.InsertTextBefore(ce->getEndLoc(), "&s" + callName);
+      ss2.str("");
       //}
     }
 
@@ -961,23 +965,24 @@ public:
             // a different way.
             if (find(specialCalls.begin(), specialCalls.end(),
                      callName + callLoc) != specialCalls.end()) {
-              ss2 << "struct s_" << callRels[callName + callLoc]
-                  << " s" << callRels[callName + callLoc] + callLoc << ";\n";
+              ss2 << "struct s_" << callRels[callName + callLoc] << " s"
+                  << callRels[callName + callLoc] + callLoc << ";\n";
               stringstream arrows;
               int diff = callDepths[callName + callLoc] -
                          depths[callRels[callName + callLoc]];
-							 // add diff number of arrows. the depth is surely more than the 
-							 // call in special case.
-                for (int i = 0; i < diff; i++) {
-                    arrows << "__s->";
-                }
-							//inserting structure initialization first.
-							//add this line only if the depth of the resolved call is
-							//greater than 1;
-							if(depths[callRels[callName + callLoc]] > 1){
-								ss2 << "s" << callRels[callName + callLoc]+callLoc << ".__s = "<<arrows.str()<<"__s;\n";
+              // add diff number of arrows. the depth is surely more than the
+              // call in special case.
+              for (int i = 0; i < diff; i++) {
+                arrows << "__s->";
               }
-							// add the variables in scope to ss2.
+              // inserting structure initialization first.
+              // add this line only if the depth of the resolved call is
+              // greater than 1;
+              if (depths[callRels[callName + callLoc]] > 1) {
+                ss2 << "s" << callRels[callName + callLoc] + callLoc
+                    << ".__s = " << arrows.str() << "__s;\n";
+              }
+              // add the variables in scope to ss2.
               for (auto var : scopes[callRels[callName + callLoc]].vars) {
                 // llvm::errs() << var.first << " " << var.second << " \n";
                 ss2 << "s" << callRels[callName + callLoc] + callLoc << "."
@@ -1193,8 +1198,10 @@ public:
             stringstream ss;
             // add appropriate dereferences in the string.
             // handeling first for integers and floats.
-            if ((drtype.find("int") != std::string::npos || drtype.find("float") != std::string::npos ||
-                drtype.find("struct") != std::string::npos )&& drtype.find("[") == std::string::npos) {
+            if ((drtype.find("int") != std::string::npos ||
+                 drtype.find("float") != std::string::npos ||
+                 drtype.find("struct") != std::string::npos) &&
+                drtype.find("[") == std::string::npos) {
               ss << "(*(";
               for (int i = 0; i < diff; i++) {
                 ss << "__s->";
@@ -1233,14 +1240,27 @@ public:
                 Rewrite.InsertTextBefore(dr->getBeginLoc(), ss.str());
                 Rewrite.InsertTextAfterToken(dr->getBeginLoc(), ")");
                 ss.str("");
-                // recursively get the location of the ']' so it can be used in
-                // remove test.
+                // iteratively get the location of the ']' so it can be used in
+                // removed.
                 auto loc = dr->getBeginLoc();
-                for (int i = 0; i < 3; i++) {
-                  loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-                                                    Rewrite.getLangOpts())
-                            ->getLocation();
+                while (1) {
+                  // cout<<"heyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n";
+                  // cout<<clang::Lexer::findNextToken(loc,
+                  // Rewrite.getSourceMgr(),
+                  // Rewrite.getLangOpts())->getName()<<"\n";
+                  if (std::strcmp(clang::Lexer::findNextToken(
+                                      loc, Rewrite.getSourceMgr(),
+                                      Rewrite.getLangOpts())
+                                      ->getName(),
+                                  "r_square") == 0) {
+                    break;
+                  }
+									loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
                 }
+                loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                                  Rewrite.getLangOpts())
+                          ->getLocation();
+
                 Rewrite.ReplaceText(loc, " * " + inx + " + ");
                 // Rewrite.InsertTextAfter(loc, " * "+ inx);
                 loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
