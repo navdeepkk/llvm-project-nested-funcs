@@ -33,4 +33,5 @@ if (CLANG_ENABLE_CLANGD)
 endif()
 add_subdirectory(loop-convert)
 add_subdirectory(hoist)
+add_subdirectory(prep)
 

@@ -1,8 +1,10 @@
 struct s_foo10 {
-int* i;
-int * a;
-int* ij;
+int * i;
+int  * a;
+int * ij;
 };
+
+
 
 void foo10( struct s_foo10*);
 //intended output

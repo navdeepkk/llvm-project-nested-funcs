@@ -1,48 +1,51 @@
-struct s_foo5 {
-int* a;
+struct s_foo8 {
 };
 
-struct s_fact8 {
-struct s_foo5 *__s;
-int* res;
-int* b;
+struct s_fact11 {
+struct s_foo8 *__s;
+int * res;
+int * b;
 };
 
-void foo5( struct s_foo5*);
-void fact8( struct s_fact8*);
+
+
+void foo8( struct s_foo8*);
+void fact11( struct s_fact11*);
+//intended output
+//first change b to the number of which factorial is calculated
+//output: factorial of that number
+
 #include <stdio.h>
 
 int main() {
-int a;
-struct s_foo5 sfoo5;
-sfoo5.a = &a;
+struct s_foo8 sfoo8;
 
 
-	foo5(&sfoo5);
+	foo8(&sfoo8);
   return 0;
 }
 
 
-void foo5( struct s_foo5* __s )  {
+void foo8( struct s_foo8* __s )  {
   int b = 5;
   int res = 1;
-struct s_fact8 sfact8;
-sfact8.__s = __s;
-sfact8.res = &res;
-sfact8.b = &b;
+struct s_fact11 sfact11;
+sfact11.__s = __s;
+sfact11.res = &res;
+sfact11.b = &b;
 
 
-  fact8(&sfact8);
+  fact11(&sfact11);
   printf("%d: \n", res);
 }
 
-void fact8( struct s_fact8* __s )  {
+void fact11( struct s_fact11* __s )  {
   if ((*(__s->b)) == 1) {
     return;
   } else {
     (*(__s->res)) *= (*(__s->b));
     (*(__s->b))--;
-    fact8(__s);
+    fact11(__s);
   }
 }
 

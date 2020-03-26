@@ -1,11 +1,13 @@
 struct s_foo15 {
-int* b;
-int * a;
+int * b;
+int  * a;
 };
 
 struct s_fun23 {
 struct s_foo15 *__s;
 };
+
+
 
 void foo15( struct s_foo15*);
 void fun23( struct s_fun23*);

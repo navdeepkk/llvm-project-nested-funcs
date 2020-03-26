@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <iostream>
 #include <vector>
 using namespace clang::SrcMgr;
 using namespace clang::tooling;
@@ -74,6 +75,9 @@ std::unordered_map<std::string, bool> structMade;
 // marked call depths is utility for finding call depths, marks all the calls as
 // true. so they are not processed again.
 std::unordered_map<std::string, bool> resolvedCalls;
+// found record is an unorderd map for found structure decls
+std::unordered_map<std::string, bool> foundRecord;
+std::unordered_map<std::string, bool> doNotRename;
 DeclarationMatcher globalMatcher =
     varDecl(hasDeclContext(translationUnitDecl())).bind("global");
 StatementMatcher labelMatcher = labelStmt().bind("label");
@@ -166,6 +170,86 @@ public:
 private:
   Rewriter &Rewrite;
 };
+//-----------------------------------------------------------------------------------------------------------//
+class StructNotRemove : public MatchFinder::MatchCallback {
+public:
+  StructNotRemove(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *sm = Result.SourceManager;
+			if(const RecordDecl *rdp =
+					Result.Nodes.getNodeAs<clang::RecordDecl>("parent")){
+				if(const RecordDecl *rdc =
+					Result.Nodes.getNodeAs<clang::RecordDecl>("child")){
+
+					 std::string rdcname = rdc->getNameAsString();
+						std::string rdcloc = rdc->getBeginLoc().printToString(*sm);
+						if (!rdcname.empty() && rdcloc.find("invalid") == std::string::npos) {
+						 rdcloc = rdcloc.substr(rdcloc.find(':') + 1, rdcloc.find(':'));
+						 rdcloc = rdcloc.substr(0, rdcloc.find(':'));
+						 doNotRename[rdcname + rdcloc] = true;
+						 // cout << "donotrename record " << rdcname << " " << rdcloc << endl;
+						}
+			}
+		}
+	}
+	private:
+	Rewriter &Rewrite;
+};
+//-----------------------------------------------------------------------------------------------------------//
+class RecordMatcher : public MatchFinder::MatchCallback {
+public:
+  RecordMatcher(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *sm = Result.SourceManager;
+    if (const LabelStmt *lp =
+            Result.Nodes.getNodeAs<clang::LabelStmt>("parent")) {
+      if (const RecordDecl *rd =
+              Result.Nodes.getNodeAs<clang::RecordDecl>("child")) {
+        std::string locrd = rd->getBeginLoc().printToString(*sm);
+				locrd = locrd.substr(locrd.find(':') + 1, locrd.find(':'));
+				locrd = locrd.substr(0, locrd.find(':'));
+        if (locrd.find("invalid") == std::string::npos && !doNotRename[rd->getNameAsString() + locrd]) {	
+					Rewrite.ReplaceText(rd->getSourceRange(), "\n"); 
+					Rewrite.ReplaceText(clang::Lexer::findNextToken(rd->getEndLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation(), ""); 
+          // mark this record decl visited.
+          foundRecord[rd->getNameAsString() + locrd] = true;
+				//-----------------------------------------------//
+				//auto loc = rd->getBeginLoc();
+				//std::pair<FileID, unsigned> LocInfo = sm->getDecomposedSpellingLoc(loc);
+        //cout<<sm->getLineNumber(LocInfo.first, LocInfo.second);
+				//---------------------------------------------------//
+				//	cout<<rd->getNameAsString()<<" "<<locrd<<endl;
+        }
+      }
+    }
+    if (const FunctionDecl *fd =
+            Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")) {
+      if (const RecordDecl *rd =
+              Result.Nodes.getNodeAs<clang::RecordDecl>("child")) {
+				std::string locrd = rd->getBeginLoc().printToString(*sm);
+				locrd = locrd.substr(locrd.find(':') + 1, locrd.find(':'));
+				locrd = locrd.substr(0, locrd.find(':'));
+        if (locrd.find("invalid") == std::string::npos && !doNotRename[rd->getNameAsString()+locrd]) {
+          if (!foundRecord[rd->getNameAsString() + locrd]) {
+						Rewrite.ReplaceText(rd->getSourceRange(), "\n");
+						Rewrite.ReplaceText(clang::Lexer::findNextToken(rd->getEndLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation(), ""); 
+						// mark this record decl visited.
+            foundRecord[rd->getNameAsString() + locrd] = true;
+				//-----------------------------------------------//
+				//auto loc = rd->getBeginLoc();
+				//std::pair<FileID, unsigned> LocInfo = sm->getDecomposedSpellingLoc(loc);
+        //cout<<sm->getLineNumber(LocInfo.first, LocInfo.second);
+				//---------------------------------------------------//
+				//	cout<<rd->getNameAsString()<<" "<<locrd<<endl;
+          }
+        }
+      }
+    }
+  }
+
+private:
+  Rewriter &Rewrite;
+};
 //------------------------------------------------------------------------------------------------------------//
 class LabelRemover : public MatchFinder::MatchCallback {
 public:
@@ -249,7 +333,11 @@ public:
 			ss<<"void ";
       ss << rewrittenBodiesFin[label] << "\n\n";
     }
-    Rewrite.InsertTextBefore(sourceLoc, ss.str());
+		
+	//	cout<<"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"<<ss.str()<<"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+		if(!ss.str().empty()){
+			Rewrite.InsertTextBefore(sourceLoc, ss.str());
+		}
   }
 
 private:
@@ -260,8 +348,8 @@ private:
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R)
-      : labelRemover(R), labelBuilder(R), labelRelBuilder(R), labelRenamer(R),
-        labelHoist(R), functionDumper(R) {
+      : labelRemover(R), labelBuilder(R), labelRelBuilder(R),recordMatcher(R), labelRenamer(R),
+        structNotRemove(R), labelHoist(R), functionDumper(R) {
     Finder.addMatcher(labelMatcher, &labelBuilder);
     Finder.addMatcher(
         labelStmt(hasAncestor(functionDecl().bind("parent"))).bind("child"),
@@ -273,7 +361,16 @@ public:
         &labelRelBuilder);
     // renmae label statements.
     LabelRenameFinder.addMatcher(labelStmt().bind("stmt"), &labelRenamer);
-    // label hoisting begins
+		//first finding nested structures only parent should be replaced.
+		StructNotRemoveFinder.addMatcher(recordDecl(hasAncestor(recordDecl()
+			.bind("parent"))).bind("child"), & structNotRemove);
+    //after renaming of labels replace the structures inside with a 
+    //blank string.
+    StructRemoveFinder.addMatcher(recordDecl(hasAncestor(labelStmt().bind("parent")))
+		.bind("child"), &recordMatcher);
+    StructRemoveFinder2.addMatcher(recordDecl(hasAncestor(functionDecl().bind("parent")))
+		.bind("child"), &recordMatcher);
+		// label hoisting begins
     LabelHoistFinder.addMatcher(
         labelStmt(hasAncestor(functionDecl().bind("parent"))).bind("child"),
         &labelHoist);
@@ -289,6 +386,9 @@ public:
   void HandleTranslationUnit(ASTContext &Context) override {
     Finder.matchAST(Context);
     LabelRenameFinder.matchAST(Context);
+		StructNotRemoveFinder.matchAST(Context);
+	  StructRemoveFinder.matchAST(Context);
+		StructRemoveFinder2.matchAST(Context);	
 		LabelHoistFinder.matchAST(Context);
     //-----------------------------------------now we can trim down the strings
     // in random order.
@@ -304,7 +404,7 @@ public:
       }
     }
     // now the trimming of the strings has been done then we can go on to modify
-    // teh strings to chang the starting of the labels to be as of that a
+    // the strings to change the starting of the labels to be as of that a
     // funtion. removing colon form the body of the functions.
     for (auto label : labels) {
       size_t pos = rewrittenBodiesFin[label].find(":");
@@ -321,8 +421,11 @@ private:
   LabelRenamer labelRenamer;
   LabelHoist labelHoist;
   LabelRemover labelRemover;
+	RecordMatcher recordMatcher;
+	StructNotRemove structNotRemove;
   FunctionDumper functionDumper;
   MatchFinder Finder;
+	MatchFinder StructNotRemoveFinder;
   MatchFinder MainDumpFinder;
   MatchFinder DelayedFinder;
   MatchFinder DelayedFinder2;
@@ -336,6 +439,8 @@ private:
   MatchFinder LabelHoistFinder;
   MatchFinder LabelRemoveFinder;
   MatchFinder FunctionDumpFinder;
+	MatchFinder StructRemoveFinder;
+	MatchFinder StructRemoveFinder2;
 };
 
 //------------------------------------------------------------------------------------------------------------

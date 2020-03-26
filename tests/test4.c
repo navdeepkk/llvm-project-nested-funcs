@@ -1,12 +1,11 @@
+#include<stdio.h>
+
 int main(){
-	foo:{
-		bar:{
+	struct point {
+		int x, y;
+	};
 
-		}
-		foe:{
-			bar();
-		}
-
-	}
+	int a;
+	printf("%d\n", a);
 return 0;
 }

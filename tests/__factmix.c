@@ -1,18 +1,20 @@
 struct s_foo22 {
-int* a;
+int * a;
 };
 
 struct s_foo13 {
-int* x;
+int * x;
 };
 
 struct s_fact28 {
 struct s_foo22 *__s;
-int* y;
-int* x;
-int* b;
-int* res;
+int * y;
+int * x;
+int * b;
+int * res;
 };
+
+
 
 void foo13( struct s_foo13*);
 void foo22( struct s_foo22*);

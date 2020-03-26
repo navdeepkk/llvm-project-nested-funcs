@@ -1,74 +1,79 @@
-struct s_r5 {
+struct s_r9 {
 int* a;
 };
 
-struct s_p7 {
-struct s_r5 *__s;
+struct s_p11 {
+struct s_r9 *__s;
 int* b;
 };
 
-struct s_q13 {
-struct s_p7 *__s;
+struct s_q17 {
+struct s_p11 *__s;
 int* c;
 int* b;
 };
 
-struct s_s15 {
-struct s_q13 *__s;
+struct s_s19 {
+struct s_q17 *__s;
 int* d;
 };
 
-void r5( struct s_r5*);
-void p7( struct s_p7*);
-void q13( struct s_q13*);
-void s15( struct s_s15*);
+
+
+void r9( struct s_r9*);
+void p11( struct s_p11*);
+void q17( struct s_q17*);
+void s19( struct s_s19*);
+//intended output
+//4 3 2 1 0
+
+
 #include<stdio.h>
 
 void main(){
     int a;
-    struct s_r5 sr5;
-sr5.a = &a;
+    struct s_r9 sr9;
+sr9.a = &a;
 
 
-    r5(&sr5);
-    return;
+    r9(&sr9);
 }
 
 
 
-void r5( struct s_r5* __s ){
+void r9( struct s_r9* __s ){
         int b = 5;
-            struct s_p7 sp7;
-sp7.__s = __s;
-sp7.b = &b;
+            struct s_p11 sp11;
+sp11.__s = __s;
+sp11.b = &b;
 
-        p7(&sp7);    
+        p11(&sp11);    
     }
 
-void p7( struct s_p7* __s ){
+void p11( struct s_p11* __s ){
 								static int b = 5;
                 b--;
                 printf("%d \n", b);
                 if(b==0) return;
                 int c;
-                struct s_q13 sq13;
-sq13.__s = __s;
-sq13.c = &c;
-sq13.b = &b;
+                struct s_q17 sq17;
+sq17.__s = __s;
+sq17.c = &c;
+sq17.b = &b;
 
-                q13(&sq13);
+                q17(&sq17);
             }
 
-void q13( struct s_q13* __s ){
+void q17( struct s_q17* __s ){
                     int d;
-                    struct s_s15 ss15;
-ss15.__s = __s;
-ss15.d = &d;
+                    struct s_s19 ss19;
+ss19.__s = __s;
+ss19.d = &d;
 
-                    s15(&ss15);
+                    s19(&ss19);
                 }
 
-void s15( struct s_s15* __s ){
-                        p7(__s->__s->__s);
+void s19( struct s_s19* __s ){
+                        p11(__s->__s->__s);
                     }
 

@@ -1,22 +1,24 @@
 struct s_quickSort11 {
-int* last;
-int* first;
-int * items;
-int* size;
+int * last;
+int * first;
+int  * items;
+int * size;
 };
 
 struct s_partition21 {
 struct s_quickSort11 *__s;
-int* p;
-int* pivotIndex;
-int* q;
+int * p;
+int * pivotIndex;
+int * q;
 };
 
 struct s_swap13 {
 struct s_quickSort11 *__s;
-int* q;
-int* p;
+int * q;
+int * p;
 };
+
+
 
 void quickSort11( struct s_quickSort11*);
 void swap13( struct s_swap13*);

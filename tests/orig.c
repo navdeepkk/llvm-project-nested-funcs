@@ -1,5 +1,5 @@
 //intended output
-//3 4 5 
+//3 4 5 6 
 
 #include<stdio.h>
 
