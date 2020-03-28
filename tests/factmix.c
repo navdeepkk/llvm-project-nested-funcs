@@ -25,6 +25,8 @@ foo : {
   int res = 1;
   if (res == 1) {
     int x, y;
+		x = 2;				//this x should resolve to the local var x.
+		printf("x inside foo inside if is: %d\n", x);
   fact : {
     if (b == 1) {
 			int x;
@@ -37,7 +39,7 @@ foo : {
   }
     fact();				//this call will calculate the factorial.
     fact();				//this call should return without doing anyhting as b has already been reduced to 1.
-    printf("fact is %d \n", res);
+    printf("factorial is :%d \n", res);
   }
 }
 a = 1;

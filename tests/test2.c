@@ -2,26 +2,16 @@
 
 int i;
 int main(){
-
-
 foo:{
-	struct point{
-		int a[10];
-	
+		struct point{int a[10];
 		struct loc{
 			int x,y;	
 		};
-
-		struct loc2{
-			struct loc l;
-		};
-
 		struct loc l;
-};
-
-	
+};	
+	struct point p[5];
 	bar:{
-	/*
+	 struct point p[5];	
 	 struct point{
 		int a[10];
 		int y;	
@@ -29,13 +19,11 @@ foo:{
 			int x,y;	
 		};
 		struct loc l;
-};
-	*/
-
+	};
 
 	struct point p1;
 	
-	struct point p[5];
+	//struct point p[5];
 
 	for( i = 0 ; i < 5 ; i++){
 			p1.a[i] = i;

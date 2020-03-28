@@ -1,18 +1,18 @@
-#include "/home/navdeep/work/projects/llvm-install/include/clang/AST/AST.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/AST/ASTContext.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchFinder.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchers.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/SourceManager.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/TokenKinds.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/CompilerInstance.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/FrontendActions.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Lex/Lexer.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Rewrite/Core/Rewriter.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/CommonOptionsParser.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Refactoring.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Tooling.h"
-#include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/CommandLine.h"
-#include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/raw_ostream.h"
+#include "clang/AST/AST.h"
+#include "clang/AST/ASTContext.h"
+#include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/Basic/SourceManager.h"
+#include "clang/Basic/TokenKinds.h"
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendActions.h"
+#include "clang/Lex/Lexer.h"
+#include "clang/Rewrite/Core/Rewriter.h"
+#include "clang/Tooling/CommonOptionsParser.h"
+#include "clang/Tooling/Refactoring.h"
+#include "clang/Tooling/Tooling.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -60,6 +60,7 @@ std::unordered_map<std::string, std::string> callRels;
 std::unordered_map<std::string, bool> visitedLabels;
 // labelbounds has label bounds.
 std::unordered_map<std::string, bounds> labelBounds;
+std::unordered_map<std::string, bounds> structBounds;
 // rewrttien bodies haves the bodies in the form of string of respective label
 // stmt.
 std::unordered_map<std::string, std::string> rewrittenBodies;
@@ -93,8 +94,8 @@ std::unordered_map<std::string, std::string> newName;
 // true. so they are not processed again.
 std::unordered_map<std::string, bool> resolvedCalls;
 DeclarationMatcher globalMatcher =
-    varDecl(hasDeclContext(translationUnitDecl())).bind("global");
-StatementMatcher labelMatcher = labelStmt().bind("label");
+    varDecl(hasDeclContext(translationUnitDecl()), isExpansionInMainFile()).bind("global");
+StatementMatcher labelMatcher = labelStmt(isExpansionInMainFile()).bind("label");
 std::unordered_map<std::string, int> depths;
 std::unordered_map<std::string, int> structdepths;
 std::unordered_map<std::string, int> vardecldepths;
@@ -155,12 +156,13 @@ void structDump() {
     }
   }
   // add structs found in between to the ss.
-  ss << structBuff.str() << "\n\n";
+  ss << structBuff.str() << "";
   // print forward declarations of functions;
   for (auto label : labels) {
     ss << "void " << label << "( "
        << "struct s_" << label << "*);\n";
   }
+	ss << "\n\n";
   // cout << ss.str();
 }
 //-------------------------------------------------------------------------------------------------------------//
@@ -214,7 +216,7 @@ public:
 //---------------------------------------------------------------------------------------------------------------//
 class RecordMatcher : public MatchFinder::MatchCallback {
 public:
-  RecordMatcher(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+  RecordMatcher() {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *sm = Result.SourceManager;
     if (const RecordDecl *rdp =
@@ -302,9 +304,6 @@ public:
       }
     }
   }
-
-private:
-  Rewriter &Rewrite;
 };
 //---------------------------------------------------------------------------------------------------------------//
 class RecordRewriter : public MatchFinder::MatchCallback {
@@ -358,7 +357,7 @@ public:
                                           Rewrite.getLangOpts())
                   ->getLocation(),
               locrd);
-          structBuff << Rewrite.getRewrittenText(rd->getSourceRange()) << ";\n";
+          structBuff << Rewrite.getRewrittenText(rd->getSourceRange()) << ";\n\n";
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
           // mark this record decl visited.
         }
@@ -386,7 +385,7 @@ public:
                     ->getLocation(),
                 locrd);
             structBuff << Rewrite.getRewrittenText(rd->getSourceRange())
-                       << ";\n";
+                       << ";\n\n";
             // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
             // mark this record decl visited.
           }
@@ -634,7 +633,7 @@ public:
       // find in the target in the list of the label ls.
       for (auto elem : record[ls]) {
         // cout << "elem: " << elem << " target: " << target << endl;
-        if (elem.find(target) != std::string::npos) {
+        if (elem.find(target) != std::string::npos  && structBounds[elem].begin <= stoi(celoc)) {
           return elem;
         }
       }
@@ -642,7 +641,7 @@ public:
     }
     for (auto elem : record[ls]) {
       // cout << "elem: " << elem << " target: " << target << endl;
-      if (elem.find(target) != std::string::npos) {
+      if (elem.find(target) != std::string::npos && structBounds[elem].begin <= stoi(celoc)) {
         return elem;
       }
     }
@@ -654,21 +653,43 @@ public:
       // find in the target in the list of the label ls.
       for (auto elem : recordinrecord[ls]) {
         // cout << "elem: " << elem << " target: " << target << endl;
-        if (elem.find(target) != std::string::npos) {
+        if (elem.find(target) != std::string::npos && structBounds[elem].begin <= stoi(celoc)) {
           return elem;
         }
       }
-      return "0";
+			//if not found in the enclosing struct then go the parent of the ls
+			//and then check the level 1 structure declarations only. will get parent
+			//from parenchilmap in this case.
+			return findRecInParent(ls, target, celoc);
     }
     for (auto elem : recordinrecord[ls]) {
       // cout << "elem: " << elem << " target: " << target << endl;
-      if (elem.find(target) != std::string::npos) {
+      if (elem.find(target) != std::string::npos && structBounds[elem].begin <= stoi(celoc)) {
         return elem;
       }
     }
     return findRecInRec(structparenChilMap[ls], target, celoc);
   }
-
+  
+	std::string findRecInParent(std::string ls, std::string target, std::string celoc) {
+		if(depths[ls] == 0){
+      // find in the target in the list of the label ls.
+      for (auto elem : record[ls]) {
+        // cout << "elem: " << elem << " target: " << target << endl;
+        if (elem.find(target) != std::string::npos && structdepths[ls] == 1 && structBounds[elem].begin <= stoi(celoc)) {
+          return elem;
+        }
+      }
+      return "0";	
+		}
+    for (auto elem : record[ls]) {
+      // cout << "elem: " << elem << " target: " << target << endl;
+      if (elem.find(target) != std::string::npos && structdepths[ls] == 1 && structBounds[elem].begin <= stoi(celoc)) {
+        return elem;
+      }
+    }
+    return findRecInParent(parenChilMap[ls], target, celoc);
+	}
 private:
   Rewriter &Rewrite;
 };
@@ -733,6 +754,7 @@ public:
         loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
         loclp = loclp.substr(0, loclp.find(':'));
         structparenChilMap[ls->getNameAsString() + locls] = lp->getNameAsString() + loclp;
+				structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
         structdepths[ls->getNameAsString() + locls] = depths[lp->getNameAsString() + loclp] + 1;
         // if parent is a function decl.
       } else if (const FunctionDecl *fd =
@@ -741,6 +763,7 @@ public:
         loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
         loclp = loclp.substr(0, loclp.find(':'));
         structparenChilMap[ls->getNameAsString() + locls] = fd->getNameAsString() + loclp;
+				structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
         // assuming that the nodes are visited in order of depth. starting from
         // lowest depth.
         structdepths[ls->getNameAsString() + locls] = 1;
@@ -751,6 +774,7 @@ public:
         loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
         loclp = loclp.substr(0, loclp.find(':'));
         structparenChilMap[ls->getNameAsString() + locls] = fd->getName() + loclp;
+				structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
         // assuming that the nodes are visited in order of depth. starting from
         // lowest depth.
         structdepths[ls->getNameAsString() + locls] = 1;
@@ -922,7 +946,6 @@ public:
   GlobalFuncDeclFinder() {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     // llvm::errs() << "global found.\n";
-    SourceManager *const sm = Result.SourceManager;
     if (const FunctionDecl *fd =
             Result.Nodes.getNodeAs<clang::FunctionDecl>("decl")) {
       if (fd->isGlobal()) {
@@ -1670,8 +1693,8 @@ private:
 
 class LabelRewriter : public MatchFinder::MatchCallback {
 public:
-  LabelRewriter(Rewriter &Rewrite, PrintingPolicy &pp)
-      : Rewrite(Rewrite), pp(pp) {}
+  LabelRewriter(Rewriter &Rewrite)
+      : Rewrite(Rewrite) {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *const sm = Result.SourceManager;
     if (const DeclRefExpr *dr =
@@ -1821,7 +1844,6 @@ public:
 
 private:
   Rewriter &Rewrite;
-  PrintingPolicy &pp;
 };
 //------------------------------------------------------------------------------------------------------------//
 class LabelRenamer : public MatchFinder::MatchCallback {
@@ -1937,10 +1959,10 @@ private:
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R, PrintingPolicy &pp)
-      : globalBuilder(R), structDumper(R), labelRelBuilder(R),structRelBuilder(R), labelBuilder(R),
-        structBuilder(R), callDepth(), structInit(R), labelRewriter(R, pp),
-        labelRenamer(R), labelHoist(R), recordFinder(R), recordResolver(R),
-        labelRemover(R), recordRewriter(R), functionDumper(R) {
+      : globalBuilder(R), labelBuilder(R), labelRelBuilder(R), structRelBuilder(R), 
+        structBuilder(R), structDumper(R), callDepth(), structInit(R), labelRewriter(R),
+        labelRenamer(R), labelHoist(R),labelRemover(R), functionDumper(R), 
+				recordFinder(),recordResolver(R), recordRewriter(R) {
     // all code from main goes here.
     // Find all the globals and labelStmt first.
     // Find all the globals and store them in struct with type and identfier.

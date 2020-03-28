@@ -19,7 +19,7 @@ fact : {
 }
 
   fact();
-  printf("%d: \n", res);
+  printf("factorial is: %d \n", res);
 }
 	foo();
   return 0;

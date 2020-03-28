@@ -1,18 +1,18 @@
-#include "/home/navdeep/work/projects/llvm-install/include/clang/AST/AST.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/AST/ASTContext.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchFinder.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchers.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/SourceManager.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/TokenKinds.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/CompilerInstance.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/FrontendActions.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Lex/Lexer.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Rewrite/Core/Rewriter.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/CommonOptionsParser.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Refactoring.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Tooling.h"
-#include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/CommandLine.h"
-#include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/raw_ostream.h"
+#include "clang/AST/AST.h"
+#include "clang/AST/ASTContext.h"
+#include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/Basic/SourceManager.h"
+#include "clang/Basic/TokenKinds.h"
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendActions.h"
+#include "clang/Lex/Lexer.h"
+#include "clang/Rewrite/Core/Rewriter.h"
+#include "clang/Tooling/CommonOptionsParser.h"
+#include "clang/Tooling/Refactoring.h"
+#include "clang/Tooling/Tooling.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -173,7 +173,7 @@ private:
 //-----------------------------------------------------------------------------------------------------------//
 class StructNotRemove : public MatchFinder::MatchCallback {
 public:
-  StructNotRemove(Rewriter &Rewrite) : Rewrite(Rewrite) {}
+  StructNotRemove() {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *sm = Result.SourceManager;
 			if(const RecordDecl *rdp =
@@ -192,8 +192,6 @@ public:
 			}
 		}
 	}
-	private:
-	Rewriter &Rewrite;
 };
 //-----------------------------------------------------------------------------------------------------------//
 class RecordMatcher : public MatchFinder::MatchCallback {
@@ -209,7 +207,7 @@ public:
 				locrd = locrd.substr(locrd.find(':') + 1, locrd.find(':'));
 				locrd = locrd.substr(0, locrd.find(':'));
         if (locrd.find("invalid") == std::string::npos && !doNotRename[rd->getNameAsString() + locrd]) {	
-					Rewrite.ReplaceText(rd->getSourceRange(), "\n"); 
+					Rewrite.ReplaceText(rd->getSourceRange(), ""); 
 					Rewrite.ReplaceText(clang::Lexer::findNextToken(rd->getEndLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation(), ""); 
           // mark this record decl visited.
           foundRecord[rd->getNameAsString() + locrd] = true;
@@ -231,7 +229,7 @@ public:
 				locrd = locrd.substr(0, locrd.find(':'));
         if (locrd.find("invalid") == std::string::npos && !doNotRename[rd->getNameAsString()+locrd]) {
           if (!foundRecord[rd->getNameAsString() + locrd]) {
-						Rewrite.ReplaceText(rd->getSourceRange(), "\n");
+						Rewrite.ReplaceText(rd->getSourceRange(), "");
 						Rewrite.ReplaceText(clang::Lexer::findNextToken(rd->getEndLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation(), ""); 
 						// mark this record decl visited.
             foundRecord[rd->getNameAsString() + locrd] = true;
@@ -263,7 +261,7 @@ public:
       locls = locls.substr(locls.find(':') + 1, locls.find(':'));
       locls = locls.substr(0, locls.find(':'));
       if (depths[lsname + locls] == 1) {
-        Rewrite.ReplaceText(ls->getSourceRange(), "\n");
+        Rewrite.ReplaceText(ls->getSourceRange(), "");
       }
     }
   }
@@ -348,37 +346,37 @@ private:
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R)
-      : labelRemover(R), labelBuilder(R), labelRelBuilder(R),recordMatcher(R), labelRenamer(R),
-        structNotRemove(R), labelHoist(R), functionDumper(R) {
+      : labelBuilder(R), labelRelBuilder(R), labelRenamer(R), 
+        labelHoist(R), labelRemover(R), recordMatcher(R), structNotRemove(), functionDumper(R) {
     Finder.addMatcher(labelMatcher, &labelBuilder);
     Finder.addMatcher(
-        labelStmt(hasAncestor(functionDecl().bind("parent"))).bind("child"),
+        labelStmt(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
         &labelRelBuilder);
     // find the parent child relationship of label statements by matching all
     // nodes having a compound statement as parent;
     Finder.addMatcher(
-        labelStmt(hasAncestor(labelStmt().bind("parent"))).bind("child"),
+        labelStmt(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
         &labelRelBuilder);
     // renmae label statements.
-    LabelRenameFinder.addMatcher(labelStmt().bind("stmt"), &labelRenamer);
+    LabelRenameFinder.addMatcher(labelStmt(isExpansionInMainFile() ).bind("stmt"), &labelRenamer);
 		//first finding nested structures only parent should be replaced.
 		StructNotRemoveFinder.addMatcher(recordDecl(hasAncestor(recordDecl()
-			.bind("parent"))).bind("child"), & structNotRemove);
+			.bind("parent")), isExpansionInMainFile()).bind("child"), & structNotRemove);
     //after renaming of labels replace the structures inside with a 
     //blank string.
-    StructRemoveFinder.addMatcher(recordDecl(hasAncestor(labelStmt().bind("parent")))
+    StructRemoveFinder.addMatcher(recordDecl(hasAncestor(labelStmt().bind("parent")),isExpansionInMainFile() )
 		.bind("child"), &recordMatcher);
-    StructRemoveFinder2.addMatcher(recordDecl(hasAncestor(functionDecl().bind("parent")))
+    StructRemoveFinder2.addMatcher(recordDecl(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile())
 		.bind("child"), &recordMatcher);
 		// label hoisting begins
     LabelHoistFinder.addMatcher(
-        labelStmt(hasAncestor(functionDecl().bind("parent"))).bind("child"),
+        labelStmt(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
         &labelHoist);
     LabelHoistFinder.addMatcher(
-        labelStmt(hasAncestor(labelStmt().bind("parent"))).bind("child"),
+        labelStmt(hasAncestor(labelStmt().bind("parent")),isExpansionInMainFile() ).bind("child"),
         &labelHoist);
     // remove label stmts from the code.
-    LabelRemoveFinder.addMatcher(labelStmt().bind("stmt"), &labelRemover);
+    LabelRemoveFinder.addMatcher(labelStmt(isExpansionInMainFile() ).bind("stmt"), &labelRemover);
     FunctionDumpFinder.addMatcher(translationUnitDecl().bind("main"),
                                   &functionDumper);
   }

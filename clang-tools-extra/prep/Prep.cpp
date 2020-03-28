@@ -1,18 +1,18 @@
-#include "/home/navdeep/work/projects/llvm-install/include/clang/AST/AST.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/AST/ASTContext.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchFinder.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/ASTMatchers/ASTMatchers.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/SourceManager.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Basic/TokenKinds.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/CompilerInstance.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Frontend/FrontendActions.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Lex/Lexer.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Rewrite/Core/Rewriter.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/CommonOptionsParser.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Refactoring.h"
-#include "/home/navdeep/work/projects/llvm-install/include/clang/Tooling/Tooling.h"
-#include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/CommandLine.h"
-#include "/home/navdeep/work/projects/llvm-install/include/llvm/Support/raw_ostream.h"
+#include "clang/AST/AST.h"
+#include "clang/AST/ASTContext.h"
+#include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/Basic/SourceManager.h"
+#include "clang/Basic/TokenKinds.h"
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendActions.h"
+#include "clang/Lex/Lexer.h"
+#include "clang/Rewrite/Core/Rewriter.h"
+#include "clang/Tooling/CommonOptionsParser.h"
+#include "clang/Tooling/Refactoring.h"
+#include "clang/Tooling/Tooling.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -39,9 +39,30 @@ class LabelFinder : public MatchFinder::MatchCallback {
 public:
   LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite) {}
   virtual void run(const MatchFinder::MatchResult &Result) {
-    SourceManager *sm = Result.SourceManager;
     if (const LabelStmt *ls =
 				Result.Nodes.getNodeAs<clang::LabelStmt>("label")) {
+				Rewrite.InsertText(ls->getBeginLoc(), "\n");
+				auto loc = ls->getBeginLoc();
+				while (1) {
+					if (std::strcmp(clang::Lexer::findNextToken(
+															loc, Rewrite.getSourceMgr(),
+															Rewrite.getLangOpts())
+															->getName(),
+													"l_brace") == 0) {
+						break;
+					}
+					loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+																						Rewrite.getLangOpts())
+										->getLocation();
+				}
+				loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+																					Rewrite.getLangOpts())
+									->getLocation();
+
+				Rewrite.InsertTextAfterToken(loc, "\n");	
+		}
+    if (const RecordDecl *ls =
+				Result.Nodes.getNodeAs<clang::RecordDecl>("record")) {
 				Rewrite.InsertText(ls->getBeginLoc(), "\n");
 				auto loc = ls->getBeginLoc();
 				while (1) {
@@ -70,7 +91,8 @@ class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R)
       : labelBuilder(R) {
-    Finder.addMatcher(labelStmt().bind("label"), &labelBuilder);
+    Finder.addMatcher(labelStmt(isExpansionInMainFile()).bind("label"), &labelBuilder);
+		Finder.addMatcher(recordDecl(isExpansionInMainFile()).bind("record"), &labelBuilder);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {

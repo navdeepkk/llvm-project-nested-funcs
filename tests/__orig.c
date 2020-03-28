@@ -1,10 +1,10 @@
-struct s_foo9 {
+struct s_foo10 {
 int * x;
 };
 
 
 
-void foo9( struct s_foo9*);
+void foo10( struct s_foo10*);
 //intended output
 //3 4 5 6 
 
@@ -13,23 +13,25 @@ void foo9( struct s_foo9*);
 void main(){
 	int x = 3;
 	
-	struct s_foo9 sfoo9;
-sfoo9.x = &x;
-
-
-
-	foo9(&sfoo9);
 	
-	foo9(&sfoo9);
+struct s_foo10 sfoo10;
+sfoo10.x = &x;
 
-	foo9(&sfoo9);
+
+
+	foo10(&sfoo10);
+	
+	foo10(&sfoo10);
+
+	foo10(&sfoo10);
 
 	printf("x is: %d\n", x);
 
 }
 
 
-void foo9( struct s_foo9* __s ){
+void foo10( struct s_foo10* __s ){
+
 		printf("x is: %d\n", (*(__s->x)));
 		(*(__s->x))++;
 	}

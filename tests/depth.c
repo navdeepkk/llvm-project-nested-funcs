@@ -5,13 +5,12 @@
 #include<stdio.h>
 
 void main(){
-    int a;
     r:{
         int b = 5;
             p:{
-								static int b = 5;
+								int a = 0;
                 b--;
-                printf("%d \n", b);
+                printf("b:%d a:%d\n",a ,b);
                 if(b==0) return;
                 int c;
                 q:{

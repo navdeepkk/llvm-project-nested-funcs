@@ -1,69 +1,72 @@
-struct s_foo7 {
+struct s_foo6 {
 };
 
-struct s_bar23 {
-struct s_foo7 *__s;
+struct s_bar20 {
+struct s_foo6 *__s;
+struct point9 * p;
 };
 
-struct point8{
-		int a[10];
-	
-		struct loc11{
+struct point9{
+int a[10];
+		
+struct loc12{
+
 			int x,y;	
 		};
-
-		struct loc215{
-			struct loc11 l;
-		};
-
-		struct loc11 l;
+		struct loc12 l;
 };
 
+struct point24{
 
-void foo7( struct s_foo7*);
-void bar23( struct s_bar23*);
+		int a[10];
+		int y;	
+		
+struct loc29{
+
+			int x,y;	
+		};
+		struct loc29 l;
+	};
+
+void foo6( struct s_foo6*);
+void bar20( struct s_bar20*);
+
+
 #include<stdio.h>
 
 int i;
 int main(){
 
-
-struct s_foo7 sfoo7;
-
+struct s_foo6 sfoo6;
 
 
-foo7(&sfoo7);	
+foo6(&sfoo6);	
 	return 0;
 }
 
 
-void foo7( struct s_foo7* __s ){
+void foo6( struct s_foo6* __s ){
+
+		
 	
-
-
+	struct point9 p[5];
 	
-	struct s_bar23 sbar23;
-sbar23.__s = __s;
+struct s_bar20 sbar20;
+sbar20.__s = __s;
+sbar20.p = &p;
 
-bar23(&sbar23);
+bar20(&sbar20);
 }
 
-void bar23( struct s_bar23* __s ){
-	/*
-	 struct point{
-		int a[10];
-		int y;	
-		struct loc{
-			int x,y;	
-		};
-		struct loc l;
-};
-	*/
+void bar20( struct s_bar20* __s ){
+
+	 struct point9 p[5];	
+	 
 
 
-	struct point8 p1;
+	struct point24 p1;
 	
-	struct point8 p[5];
+	//struct point p[5];
 
 	for( i = 0 ; i < 5 ; i++){
 			p1.a[i] = i;
