@@ -3,23 +3,28 @@
 
 #include<stdio.h>
 
+int a[10][5][2];
+int b[5];
 int main(){
-        int a[10][10];
 				int ij;
 				int i;
         foo:{
+							bar:{
 							if(i == 0){
-                for(ij = 0; ij < 5; ij++){
-                        a[ij][ij] = 5;
+                for(ij = 0; ij < 2; ij++){
+                       a[ij][ij][ij] = 5;
+												b[ij] = ij;
                 }
 							}
 							else if(i == 1){
-									for(ij = 0; ij < 5; ij++){
-									printf("%d ", a[ij][ij]);
+									for(ij = 0; ij < 2; ij++){
+									printf("%d ", a[b[ij]][b[ij]][b[ij]]);
 									printf("\n");
 								}
 							}
             }
+	bar();
+}
 i = 0;
 foo();
 

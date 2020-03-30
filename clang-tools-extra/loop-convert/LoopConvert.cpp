@@ -15,6 +15,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>
 #include <sstream>
+#include <stack>
 #include <string>
 #include <typeinfo>
 #include <unordered_map>
@@ -78,6 +79,8 @@ std::unordered_map<std::string, bool> resolvedStruct;
 // doNotRename is a map for structure declarations inside strructures
 // so that they should not be renamed.
 std::unordered_map<std::string, bool> doNotRename;
+// parenstack is for matching parentheses
+std::stack<char> parenStack;
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
@@ -87,15 +90,17 @@ std::unordered_map<std::string, int> callDepths;
 
 std::vector<std::pair<std::string, int>> depthSorted;
 std::unordered_map<std::string, bool> structMade;
-//renamedStruct is utility for structdump;
+// renamedStruct is utility for structdump;
 std::unordered_map<std::string, bool> renamedStruct;
 std::unordered_map<std::string, std::string> newName;
 // marked call depths is utility for finding call depths, marks all the calls as
 // true. so they are not processed again.
 std::unordered_map<std::string, bool> resolvedCalls;
 DeclarationMatcher globalMatcher =
-    varDecl(hasDeclContext(translationUnitDecl()), isExpansionInMainFile()).bind("global");
-StatementMatcher labelMatcher = labelStmt(isExpansionInMainFile()).bind("label");
+    varDecl(hasDeclContext(translationUnitDecl()), isExpansionInMainFile())
+        .bind("global");
+StatementMatcher labelMatcher =
+    labelStmt(isExpansionInMainFile()).bind("label");
 std::unordered_map<std::string, int> depths;
 std::unordered_map<std::string, int> structdepths;
 std::unordered_map<std::string, int> vardecldepths;
@@ -132,24 +137,32 @@ void structDump() {
         // currently not adding any functionality to handle or structs any
         // differently.
         if (var.second.find('[') != std::string::npos) {
-					//if the struct is renamed then use the new name here.
-					if(var.second.find("struct") != std::string::npos && renamedStruct[var.first + std::to_string(scopes[label.first].locs[var.first])]){
-								ss<<"struct "<<newName[var.first + std::to_string(scopes[label.first].locs[var.first])]<<" * "<<var.first<<";\n";	
-					}
-					else{
-					ss << var.second.substr(0, var.second.find('[')) << " * " << var.first
-             << ";\n";
-					}
+          // if the struct is renamed then use the new name here.
+          if (var.second.find("struct") != std::string::npos &&
+              renamedStruct[var.first + std::to_string(scopes[label.first]
+                                                           .locs[var.first])]) {
+            ss << "struct "
+               << newName[var.first +
+                          std::to_string(scopes[label.first].locs[var.first])]
+               << " * " << var.first << ";\n";
+          } else {
+            ss << var.second.substr(0, var.second.find('[')) << " * "
+               << var.first << ";\n";
+          }
         } else {
-					//if var.second has struct in it and the struct is renamed then use the 
-					//new name not the old one.	
-					//if the struct is renamed then use the new name here.
-					if(var.second.find("struct") != std::string::npos && renamedStruct[var.first + std::to_string(scopes[label.first].locs[var.first])]){
-								ss<<"struct "<<newName[var.first + std::to_string(scopes[label.first].locs[var.first])]<<" * "<<var.first<<";\n";
-						}
-					else{
-          ss << var.second << " * " << var.first << ";\n";
-					}
+          // if var.second has struct in it and the struct is renamed then use
+          // the new name not the old one. if the struct is renamed then use the
+          // new name here.
+          if (var.second.find("struct") != std::string::npos &&
+              renamedStruct[var.first + std::to_string(scopes[label.first]
+                                                           .locs[var.first])]) {
+            ss << "struct "
+               << newName[var.first +
+                          std::to_string(scopes[label.first].locs[var.first])]
+               << " * " << var.first << ";\n";
+          } else {
+            ss << var.second << " * " << var.first << ";\n";
+          }
         }
       }
       ss << "};\n\n";
@@ -162,7 +175,7 @@ void structDump() {
     ss << "void " << label << "( "
        << "struct s_" << label << "*);\n";
   }
-	ss << "\n\n";
+  ss << "\n\n";
   // cout << ss.str();
 }
 //-------------------------------------------------------------------------------------------------------------//
@@ -231,8 +244,8 @@ public:
         if (locrdc.find("invalid") == std::string::npos) {
           locrdc = locrdc.substr(locrdc.find(':') + 1, locrdc.find(':'));
           locrdc = locrdc.substr(0, locrdc.find(':'));
-          recordinrecord[rdp->getNameAsString() + loclrdp].push_back(rdc->getNameAsString() +
-                                                  locrdc);
+          recordinrecord[rdp->getNameAsString() + loclrdp].push_back(
+              rdc->getNameAsString() + locrdc);
           //      Rewrite.InsertTextAfterToken(
           //        clang::Lexer::findNextToken(rd->getBeginLoc(),
           //                                  Rewrite.getSourceMgr(),
@@ -270,7 +283,6 @@ public:
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
           // mark this record decl visited.
           foundRecord[rd->getNameAsString() + locrd] = true;
-					
         }
       }
     }
@@ -321,16 +333,17 @@ public:
         locrdc = locrdc.substr(0, locrdc.find(':'));
         if (locrdc.find("invalid") == std::string::npos &&
             !foundRecord[rdc->getNameAsString() + locrdc]) {
-           //cout << "rewriting record " << rd->getNameAsString() << " " <<
-           //locrd
-           //  << endl;
+          // cout << "rewriting record " << rd->getNameAsString() << " " <<
+          // locrd
+          //  << endl;
           Rewrite.InsertTextAfterToken(
               clang::Lexer::findNextToken(rdc->getBeginLoc(),
                                           Rewrite.getSourceMgr(),
                                           Rewrite.getLangOpts())
                   ->getLocation(),
               locrdc);
-          //structBuff << Rewrite.getRewrittenText(rdc->getSourceRange()) << ";\n";
+          // structBuff << Rewrite.getRewrittenText(rdc->getSourceRange()) <<
+          // ";\n";
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
           // mark this record decl visited.
         }
@@ -345,19 +358,20 @@ public:
         std::string locrd = rd->getBeginLoc().printToString(*sm);
         locrd = locrd.substr(locrd.find(':') + 1, locrd.find(':'));
         locrd = locrd.substr(0, locrd.find(':'));
-				//found record is true when struct is already rewritten.
+        // found record is true when struct is already rewritten.
         if (locrd.find("invalid") == std::string::npos &&
             !foundRecord[rd->getNameAsString() + locrd]) {
-           //cout << "rewriting record " << rd->getNameAsString() << " " <<
-           //locrd
-           //  << endl;
+          // cout << "rewriting record " << rd->getNameAsString() << " " <<
+          // locrd
+          //  << endl;
           Rewrite.InsertTextAfterToken(
               clang::Lexer::findNextToken(rd->getBeginLoc(),
                                           Rewrite.getSourceMgr(),
                                           Rewrite.getLangOpts())
                   ->getLocation(),
               locrd);
-          structBuff << Rewrite.getRewrittenText(rd->getSourceRange()) << ";\n\n";
+          structBuff << Rewrite.getRewrittenText(rd->getSourceRange())
+                     << ";\n\n";
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
           // mark this record decl visited.
         }
@@ -375,9 +389,9 @@ public:
 
         if (locrd.find("invalid") == std::string::npos) {
           if (!foundRecord[rd->getNameAsString() + locrd]) {
-             //cout << "rewriting record " << rd->getNameAsString() << " " <<
-             //locrd
-              // << endl;
+            // cout << "rewriting record " << rd->getNameAsString() << " " <<
+            // locrd
+            // << endl;
             Rewrite.InsertTextAfterToken(
                 clang::Lexer::findNextToken(rd->getBeginLoc(),
                                             Rewrite.getSourceMgr(),
@@ -435,7 +449,7 @@ public:
         if (!rdcname.empty() && rdcloc.find("invalid") == std::string::npos) {
           rdcloc = rdcloc.substr(rdcloc.find(':') + 1, rdcloc.find(':'));
           rdcloc = rdcloc.substr(0, rdcloc.find(':'));
-          //doNotRename[rdcname + rdcloc] = true;
+          // doNotRename[rdcname + rdcloc] = true;
           // cout << "donotrename record " << rdcname << " " << rdcloc << endl;
         }
       }
@@ -447,28 +461,30 @@ public:
       loclrd = loclrd.substr(loclrd.find(':') + 1, loclrd.find(':'));
       loclrd = loclrd.substr(0, loclrd.find(':'));
 
-      if (const FieldDecl *fd = Result.Nodes.getNodeAs<clang::FieldDecl>("child")) {
+      if (const FieldDecl *fd =
+              Result.Nodes.getNodeAs<clang::FieldDecl>("child")) {
         std::string vdName = fd->getNameAsString();
         std::string vdloc = fd->getBeginLoc().printToString(*sm);
         vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
         vdloc = vdloc.substr(0, vdloc.find(':'));
 
-        //cout << "rewriting field decl:" << vdName << " " << vdloc <<" "<<fd->getType().getAsString()<<endl;
+        // cout << "rewriting field decl:" << vdName << " " << vdloc <<"
+        // "<<fd->getType().getAsString()<<endl;
         if (fd->getType().getAsString().find("struct") == 0) {
           resolvedStruct[vdName + vdloc] = true;
-          //cout << "rewriting field decl:" << vdName << " " << vdloc <<" ";
+          // cout << "rewriting field decl:" << vdName << " " << vdloc <<" ";
           // extract only the structure name from the type.
           std::string type = fd->getType().getAsString();
           // cout<<type<<endl;
           if (type.find('[') == std::string::npos) {
-						//this logic works because the type is always returned with
-						//single spaaces.
+            // this logic works because the type is always returned with
+            // single spaaces.
             unsigned first = type.find(' ');
             type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
-            //cout<<type<<endl;
+            // cout<<type<<endl;
             string res =
                 findRecInRec(rd->getNameAsString() + loclrd,
-                        type.substr(first, type.length() - first), vdloc);
+                             type.substr(first, type.length() - first), vdloc);
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
@@ -477,9 +493,10 @@ public:
                                       Rewrite.getLangOpts())
                                       ->getLocation(),
                                   res);
-					//mark this struct as renamed for struct dump to correct name while dumping.
-					renamedStruct[vdName + vdloc] = true;
-					newName[vdName + vdloc] = res;	
+              // mark this struct as renamed for struct dump to correct name
+              // while dumping.
+              renamedStruct[vdName + vdloc] = true;
+              newName[vdName + vdloc] = res;
             }
             // cout << res << "\n";
           } else {
@@ -487,7 +504,7 @@ public:
             type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
             unsigned last = type.find('[');
             string res = findRecInRec(rd->getNameAsString() + loclrd,
-                                 type.substr(first, last - first), vdloc);
+                                      type.substr(first, last - first), vdloc);
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
@@ -496,9 +513,10 @@ public:
                                       Rewrite.getLangOpts())
                                       ->getLocation(),
                                   res);
-					//mark this struct as renamed for struct dump to correct name while dumping.
-					renamedStruct[vdName + vdloc] = true;
-					newName[vdName + vdloc] = res;	
+              // mark this struct as renamed for struct dump to correct name
+              // while dumping.
+              renamedStruct[vdName + vdloc] = true;
+              newName[vdName + vdloc] = res;
             }
             // cout << res << "\n";
           }
@@ -524,8 +542,8 @@ public:
           std::string type = vd->getType().getAsString();
           // cout<<type<<endl;
           if (type.find('[') == std::string::npos) {
-						//this logic works because the type is always returned with
-						//single spaaces.
+            // this logic works because the type is always returned with
+            // single spaaces.
             unsigned first = type.find(' ');
             type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
             string res =
@@ -539,9 +557,10 @@ public:
                                       Rewrite.getLangOpts())
                                       ->getLocation(),
                                   res);
-					//mark this struct as renamed for struct dump to correct name while dumping.
-					renamedStruct[vdName + vdloc] = true;
-					newName[vdName + vdloc] = res;	
+              // mark this struct as renamed for struct dump to correct name
+              // while dumping.
+              renamedStruct[vdName + vdloc] = true;
+              newName[vdName + vdloc] = res;
             }
             // cout << res << "\n";
           } else {
@@ -558,9 +577,10 @@ public:
                                       Rewrite.getLangOpts())
                                       ->getLocation(),
                                   res);
-					//mark this struct as renamed for struct dump to correct name while dumping.
-					renamedStruct[vdName + vdloc] = true;
-					newName[vdName + vdloc] = res;	
+              // mark this struct as renamed for struct dump to correct name
+              // while dumping.
+              renamedStruct[vdName + vdloc] = true;
+              newName[vdName + vdloc] = res;
             }
             // cout << res << "\n";
           }
@@ -598,9 +618,10 @@ public:
                                       Rewrite.getLangOpts())
                                       ->getLocation(),
                                   res);
-					//mark this struct as renamed for struct dump to correct name while dumping.
-					renamedStruct[vdName + vdloc] = true;
-					newName[vdName + vdloc] = res;	
+              // mark this struct as renamed for struct dump to correct name
+              // while dumping.
+              renamedStruct[vdName + vdloc] = true;
+              newName[vdName + vdloc] = res;
             }
             // cout << res << "\n";
           } else {
@@ -617,9 +638,10 @@ public:
                                       Rewrite.getLangOpts())
                                       ->getLocation(),
                                   res);
-					//mark this struct as renamed for struct dump to correct name while dumping.
-					renamedStruct[vdName + vdloc] = true;
-					newName[vdName + vdloc] = res;	
+              // mark this struct as renamed for struct dump to correct name
+              // while dumping.
+              renamedStruct[vdName + vdloc] = true;
+              newName[vdName + vdloc] = res;
             }
             // cout << res << "\n";
           }
@@ -633,7 +655,8 @@ public:
       // find in the target in the list of the label ls.
       for (auto elem : record[ls]) {
         // cout << "elem: " << elem << " target: " << target << endl;
-        if (elem.find(target) != std::string::npos  && structBounds[elem].begin <= stoi(celoc)) {
+        if (elem.find(target) != std::string::npos &&
+            structBounds[elem].begin <= stoi(celoc)) {
           return elem;
         }
       }
@@ -641,55 +664,63 @@ public:
     }
     for (auto elem : record[ls]) {
       // cout << "elem: " << elem << " target: " << target << endl;
-      if (elem.find(target) != std::string::npos && structBounds[elem].begin <= stoi(celoc)) {
+      if (elem.find(target) != std::string::npos &&
+          structBounds[elem].begin <= stoi(celoc)) {
         return elem;
       }
     }
     return findRec(parenChilMap[ls], target, celoc);
   }
-  std::string findRecInRec(std::string ls, std::string target, std::string celoc) {
+  std::string findRecInRec(std::string ls, std::string target,
+                           std::string celoc) {
     // first find in the parent if a struct is present with the same name.
     if (structdepths[ls] == 0) {
       // find in the target in the list of the label ls.
       for (auto elem : recordinrecord[ls]) {
         // cout << "elem: " << elem << " target: " << target << endl;
-        if (elem.find(target) != std::string::npos && structBounds[elem].begin <= stoi(celoc)) {
+        if (elem.find(target) != std::string::npos &&
+            structBounds[elem].begin <= stoi(celoc)) {
           return elem;
         }
       }
-			//if not found in the enclosing struct then go the parent of the ls
-			//and then check the level 1 structure declarations only. will get parent
-			//from parenchilmap in this case.
-			return findRecInParent(ls, target, celoc);
+      // if not found in the enclosing struct then go the parent of the ls
+      // and then check the level 1 structure declarations only. will get parent
+      // from parenchilmap in this case.
+      return findRecInParent(ls, target, celoc);
     }
     for (auto elem : recordinrecord[ls]) {
       // cout << "elem: " << elem << " target: " << target << endl;
-      if (elem.find(target) != std::string::npos && structBounds[elem].begin <= stoi(celoc)) {
+      if (elem.find(target) != std::string::npos &&
+          structBounds[elem].begin <= stoi(celoc)) {
         return elem;
       }
     }
     return findRecInRec(structparenChilMap[ls], target, celoc);
   }
-  
-	std::string findRecInParent(std::string ls, std::string target, std::string celoc) {
-		if(depths[ls] == 0){
+
+  std::string findRecInParent(std::string ls, std::string target,
+                              std::string celoc) {
+    if (depths[ls] == 0) {
       // find in the target in the list of the label ls.
       for (auto elem : record[ls]) {
         // cout << "elem: " << elem << " target: " << target << endl;
-        if (elem.find(target) != std::string::npos && structdepths[ls] == 1 && structBounds[elem].begin <= stoi(celoc)) {
+        if (elem.find(target) != std::string::npos && structdepths[ls] == 1 &&
+            structBounds[elem].begin <= stoi(celoc)) {
           return elem;
         }
       }
-      return "0";	
-		}
+      return "0";
+    }
     for (auto elem : record[ls]) {
       // cout << "elem: " << elem << " target: " << target << endl;
-      if (elem.find(target) != std::string::npos && structdepths[ls] == 1 && structBounds[elem].begin <= stoi(celoc)) {
+      if (elem.find(target) != std::string::npos && structdepths[ls] == 1 &&
+          structBounds[elem].begin <= stoi(celoc)) {
         return elem;
       }
     }
     return findRecInParent(parenChilMap[ls], target, celoc);
-	}
+  }
+
 private:
   Rewriter &Rewrite;
 };
@@ -753,17 +784,20 @@ public:
         std::string loclp = lp->getBeginLoc().printToString(*sm);
         loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
         loclp = loclp.substr(0, loclp.find(':'));
-        structparenChilMap[ls->getNameAsString() + locls] = lp->getNameAsString() + loclp;
-				structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
-        structdepths[ls->getNameAsString() + locls] = depths[lp->getNameAsString() + loclp] + 1;
+        structparenChilMap[ls->getNameAsString() + locls] =
+            lp->getNameAsString() + loclp;
+        structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
+        structdepths[ls->getNameAsString() + locls] =
+            depths[lp->getNameAsString() + loclp] + 1;
         // if parent is a function decl.
       } else if (const FunctionDecl *fd =
                      Result.Nodes.getNodeAs<clang::FunctionDecl>("parent")) {
         std::string loclp = fd->getBeginLoc().printToString(*sm);
         loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
         loclp = loclp.substr(0, loclp.find(':'));
-        structparenChilMap[ls->getNameAsString() + locls] = fd->getNameAsString() + loclp;
-				structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
+        structparenChilMap[ls->getNameAsString() + locls] =
+            fd->getNameAsString() + loclp;
+        structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
         // assuming that the nodes are visited in order of depth. starting from
         // lowest depth.
         structdepths[ls->getNameAsString() + locls] = 1;
@@ -773,8 +807,9 @@ public:
         std::string loclp = fd->getBeginLoc().printToString(*sm);
         loclp = loclp.substr(loclp.find(':') + 1, loclp.find(':'));
         loclp = loclp.substr(0, loclp.find(':'));
-        structparenChilMap[ls->getNameAsString() + locls] = fd->getName() + loclp;
-				structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
+        structparenChilMap[ls->getNameAsString() + locls] =
+            fd->getName() + loclp;
+        structBounds[ls->getNameAsString() + locls].begin = stoi(locls);
         // assuming that the nodes are visited in order of depth. starting from
         // lowest depth.
         structdepths[ls->getNameAsString() + locls] = 1;
@@ -1083,7 +1118,7 @@ public:
                 }
               }
             }
-            // if call is foudn anywhere then it resolves to the global call.
+            // if call is found anywhere then it resolves to the global call.
             if (!flag) {
               // callRels[callName + celoc] = callName;
             }
@@ -1147,7 +1182,8 @@ public:
                                     [](char c) { return !isalpha(c); }),
                           tempLabel.end());
           if (tempLabel.compare(target) == 0) {
-            // the names are also same. check for location now
+            // the names are also same. check for location now.
+            // the locs can also be equal in this case.
             if (labelBounds[ls].begin <= stoi(celoc)) {
               // yeah matching call found.
               resolvedCalls[target + celoc] = true;
@@ -1693,8 +1729,7 @@ private:
 
 class LabelRewriter : public MatchFinder::MatchCallback {
 public:
-  LabelRewriter(Rewriter &Rewrite)
-      : Rewrite(Rewrite) {}
+  LabelRewriter(Rewriter &Rewrite) : Rewrite(Rewrite) {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *const sm = Result.SourceManager;
     if (const DeclRefExpr *dr =
@@ -1772,6 +1807,7 @@ public:
               Rewrite.InsertTextAfterToken(dr->getBeginLoc(), "))");
               ss.str("");
             }
+            // it could be a typedef check it id the case.
             // if it is a array.
             else {
               // check the dimensionality of the array.
@@ -1791,10 +1827,17 @@ public:
                 Rewrite.InsertTextBefore(dr->getBeginLoc(), ss.str());
                 Rewrite.InsertTextAfterToken(dr->getBeginLoc(), ")");
                 ss.str("");
-              } else if (dims == 2) {
+              } else if (dims >= 2) {
+                vector<std::string> arr;
                 std::string type = dr->getType().getAsString();
-                std::string inx = type.substr(
-                    type.find('[') + 1, type.find(']') - type.find('[') - 1);
+                for (int i = 0; i < dims; i++) {
+                  arr.push_back(type.substr(
+                      type.find('[') + 1, type.find(']') - type.find('[') - 1));
+                  type = type.substr(type.find(']') + 1,
+                                     type.length() - type.find(']') - 1);
+                  // cout << arr[i] << endl;
+                }
+                // things to insert before the array.
                 ss << "(";
                 for (int i = 0; i < diff; i++) {
                   ss << "__s->";
@@ -1804,33 +1847,67 @@ public:
                 ss.str("");
                 // iteratively get the location of the ']' so it can be used in
                 // removed.
+                // instead going to use stack based algorithm to remove the
+                // approprite pair of parentheses.
                 auto loc = dr->getBeginLoc();
-                while (1) {
-                  // cout<<"heyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n";
-                  // cout<<clang::Lexer::findNextToken(loc,
-                  // Rewrite.getSourceMgr(),
-                  // Rewrite.getLangOpts())->getName()<<"\n";
-                  if (std::strcmp(clang::Lexer::findNextToken(
-                                      loc, Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getName(),
-                                  "r_square") == 0) {
-                    break;
+                for (int i = 0; i < dims - 1; i++) {
+                  while (1) {
+                    // cout << "in while" << endl;
+                    // cout << i << endl;
+                    // cout << parenStack.size() << endl;
+                    if (std::strcmp(clang::Lexer::findNextToken(
+                                        loc, Rewrite.getSourceMgr(),
+                                        Rewrite.getLangOpts())
+                                        ->getName(),
+                                    "l_square") == 0) {
+                      // push the l_square into stack
+                      parenStack.push('[');
+                    } else if (std::strcmp(clang::Lexer::findNextToken(
+                                               loc, Rewrite.getSourceMgr(),
+                                               Rewrite.getLangOpts())
+                                               ->getName(),
+                                           "r_square") == 0) {
+                      // there is always a matching parentheses so first pop and
+                      // and then check if stack is empty.
+                      if (!parenStack.empty()) {
+                        parenStack.pop();
+                      }
+                      if (parenStack.empty()) {
+                        break;
+                      }
+                    }
+                    loc =
+                        clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                                    Rewrite.getLangOpts())
+                            ->getLocation();
                   }
+                  // this loc is the loc of the last ']'.
                   loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
                                                     Rewrite.getLangOpts())
                             ->getLocation();
+                  // construct the string to place usin the dimensions.
+                  stringstream inx;
+                  for (int j = i + 1; j < dims; j++) {
+                    inx << " * " << arr[j];
+                  }
+                  // append a '+' in last of string.
+                  inx << " + ";
+                  Rewrite.ReplaceText(loc, inx.str());
+                  inx.str("");
+                  // this loc is the loc of adjacent '['.
+                  loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                                    Rewrite.getLangOpts())
+                            ->getLocation();
+                  // push this ']' onto the stack for next iteration. otherwise
+                  // parentheses will never match; the stack was already empty
+                  // when it came out of the while loop.
+                  parenStack.push('[');
+                  Rewrite.ReplaceText(loc, "");
                 }
-                loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-                                                  Rewrite.getLangOpts())
-                          ->getLocation();
-
-                Rewrite.ReplaceText(loc, " * " + inx + " + ");
-                // Rewrite.InsertTextAfter(loc, " * "+ inx);
-                loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-                                                  Rewrite.getLangOpts())
-                          ->getLocation();
-                Rewrite.ReplaceText(loc, "");
+              }
+              // empty the stack for next match.
+              while (!parenStack.empty()) {
+                parenStack.pop();
               }
             } /* else if (drtype.find("float [") != std::string::npos) {
                // check the dims of array.
@@ -1959,10 +2036,11 @@ private:
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R, PrintingPolicy &pp)
-      : globalBuilder(R), labelBuilder(R), labelRelBuilder(R), structRelBuilder(R), 
-        structBuilder(R), structDumper(R), callDepth(), structInit(R), labelRewriter(R),
-        labelRenamer(R), labelHoist(R),labelRemover(R), functionDumper(R), 
-				recordFinder(),recordResolver(R), recordRewriter(R) {
+      : globalBuilder(R), labelBuilder(R), labelRelBuilder(R),
+        structRelBuilder(R), structBuilder(R), structDumper(R), callDepth(),
+        structInit(R), labelRewriter(R), labelRenamer(R), labelHoist(R),
+        labelRemover(R), functionDumper(R), recordFinder(), recordResolver(R),
+        recordRewriter(R) {
     // all code from main goes here.
     // Find all the globals and labelStmt first.
     // Find all the globals and store them in struct with type and identfier.
@@ -1974,45 +2052,54 @@ public:
     //                                hasParent(functionDecl().bind("parent")))))
     //                      .bind("child"),
     //                  &labelRelBuilder);
-    Finder.addMatcher(
-        labelStmt(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &labelRelBuilder);
+    Finder.addMatcher(labelStmt(hasAncestor(functionDecl().bind("parent")),
+                                isExpansionInMainFile())
+                          .bind("child"),
+                      &labelRelBuilder);
     // find the parent child relationship of label statements by matching all
     // nodes having a compound statement as parent;
-    Finder.addMatcher(
-        labelStmt(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &labelRelBuilder);
-		//finding the relations between nested structures.
-    Finder.addMatcher(
-        recordDecl(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &structRelBuilder);
+    Finder.addMatcher(labelStmt(hasAncestor(labelStmt().bind("parent")),
+                                isExpansionInMainFile())
+                          .bind("child"),
+                      &labelRelBuilder);
+    // finding the relations between nested structures.
+    Finder.addMatcher(recordDecl(hasAncestor(functionDecl().bind("parent")),
+                                 isExpansionInMainFile())
+                          .bind("child"),
+                      &structRelBuilder);
     // find the parent child relationship of label statements by matching all
     // nodes having a compound statement as parent;
-    Finder.addMatcher(
-        recordDecl(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &structRelBuilder);
+    Finder.addMatcher(recordDecl(hasAncestor(labelStmt().bind("parent")),
+                                 isExpansionInMainFile())
+                          .bind("child"),
+                      &structRelBuilder);
     // find the parent child relationship of label statements by matching all
     // nodes having a compound statement as parent;
-    Finder.addMatcher(
-        recordDecl(hasAncestor(recordDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &structRelBuilder);
+    Finder.addMatcher(recordDecl(hasAncestor(recordDecl().bind("parent")),
+                                 isExpansionInMainFile())
+                          .bind("child"),
+                      &structRelBuilder);
     // for all nodes find the variables that need to be passed on into its
     // scope.
-    DelayedFinder.addMatcher(varDecl(hasAncestor(functionDecl()), isExpansionInMainFile()).bind("child"),
-                             &structBuilder);
+    DelayedFinder.addMatcher(
+        varDecl(hasAncestor(functionDecl()), isExpansionInMainFile())
+            .bind("child"),
+        &structBuilder);
 
     // Next thing would be to find the depths of the call expressions, so
     // appropriate redirections for variables may be provided. first
     // finding all calls at depth one.
-    DelayedFinder.addMatcher(
-        callExpr(hasAncestor(functionDecl()), argumentCountIs(0), isExpansionInMainFile())
-            .bind("depth1"),
-        &callDepth);
+    DelayedFinder.addMatcher(callExpr(hasAncestor(functionDecl()),
+                                      argumentCountIs(0),
+                                      isExpansionInMainFile())
+                                 .bind("depth1"),
+                             &callDepth);
     // finding the call expressions at more depths greater than .
-    DelayedFinder.addMatcher(
-        callExpr(hasAncestor(labelStmt().bind("parent")), argumentCountIs(0), isExpansionInMainFile())
-            .bind("depth"),
-        &callDepth);
+    DelayedFinder.addMatcher(callExpr(hasAncestor(labelStmt().bind("parent")),
+                                      argumentCountIs(0),
+                                      isExpansionInMainFile())
+                                 .bind("depth"),
+                             &callDepth);
     // now the depths are in hand the logic to initialize scope srtuctures
     // before function calls must start. The below matcher inserts structs
     // intializations for function calls before the functions at a depth level
@@ -2020,17 +2107,20 @@ public:
     //-------------------------------------------------------------------//
     // going to find global decls needed for call resolution
     DelayedFinder.addMatcher(
-        functionDecl(hasParent(translationUnitDecl()), isExpansionInMainFile()).bind("decl"),
+        functionDecl(hasParent(translationUnitDecl()), isExpansionInMainFile())
+            .bind("decl"),
         &globalFuncDeclFinder);
     // first going to resolve calls at depth greatewr than 1 before the
     // strutcs are emitted.
     MatchCallResolver.addMatcher(
-        callExpr(hasAncestor(labelStmt().bind("parent")), argumentCountIs(0), isExpansionInMainFile())
+        callExpr(hasAncestor(labelStmt().bind("parent")), argumentCountIs(0),
+                 isExpansionInMainFile())
             .bind("call"),
         &callResolver);
     // resolve calls at depths 1
     MatchCallResolver2.addMatcher(
-        callExpr(hasAncestor(functionDecl().bind("parent")), argumentCountIs(0), isExpansionInMainFile())
+        callExpr(hasAncestor(functionDecl().bind("parent")), argumentCountIs(0),
+                 isExpansionInMainFile())
             .bind("call"),
         &callResolver);
     // now finding the vars in the last level label.
@@ -2039,30 +2129,38 @@ public:
     // below matcher just places finds the startloc and endloc of structs.
     // LastLabelFinder.addMatcher(labelStmt().bind("label"), &labelLast);
     // need to build decls for the label stmt at innermost depth.
-    LastLabelFinder.addMatcher(
-        varDecl(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &labelLast);
+    LastLabelFinder.addMatcher(varDecl(hasAncestor(labelStmt().bind("parent")),
+                                       isExpansionInMainFile())
+                                   .bind("child"),
+                               &labelLast);
     // finding depths for vardecls to prune from structures.
-    VarDepthFinder.addMatcher(varDecl(isExpansionInMainFile()).bind("one"), &varDepthFinder);
+    VarDepthFinder.addMatcher(varDecl(isExpansionInMainFile()).bind("one"),
+                              &varDepthFinder);
     // for decls within labels
-    VarDepthFinder.addMatcher(
-        varDecl(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &varDepthFinder);
+    VarDepthFinder.addMatcher(varDecl(hasAncestor(labelStmt().bind("parent")),
+                                      isExpansionInMainFile())
+                                  .bind("child"),
+                              &varDepthFinder);
     // for decls at global level
     VarDepthFinder.addMatcher(
-        varDecl(hasDeclContext(translationUnitDecl().bind("parent")),	isExpansionInMainFile()) 
+        varDecl(hasDeclContext(translationUnitDecl().bind("parent")),
+                isExpansionInMainFile())
             .bind("child"),
         &varDepthFinder);
     // find the relationships between the record decls and label stmts.
-    // Also between recorddecls inside record decls. 
-    RecordFinder.addMatcher(
-        recordDecl(hasAncestor(recordDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &recordFinder);
-    RecordFinder.addMatcher(
-        recordDecl(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
-        &recordFinder);
+    // Also between recorddecls inside record decls.
+    RecordFinder.addMatcher(recordDecl(hasAncestor(recordDecl().bind("parent")),
+                                       isExpansionInMainFile())
+                                .bind("child"),
+                            &recordFinder);
+    RecordFinder.addMatcher(recordDecl(hasAncestor(labelStmt().bind("parent")),
+                                       isExpansionInMainFile())
+                                .bind("child"),
+                            &recordFinder);
     RecordFinder2.addMatcher(
-        recordDecl(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
+        recordDecl(hasAncestor(functionDecl().bind("parent")),
+                   isExpansionInMainFile())
+            .bind("child"),
         &recordFinder);
     // first mark all the vardecl having a record decl as ancestor. the cases
     // are not to be rewritten as they are inside the structures themselves.
@@ -2071,19 +2169,24 @@ public:
     //    &recordResolver);
     // then mark all recorddecl inside record decl so that they are  also not
     // renamed.
-    //RecordFinder0.addMatcher(
+    // RecordFinder0.addMatcher(
     //    recordDecl(hasAncestor(recordDecl().bind("parent"))).bind("child"),
     //    &recordResolver);
     // going to rewrite the vardecls of structs ignoring the ones not to
     // be rewritten.
     RecordFinder3.addMatcher(
-        fieldDecl(hasAncestor(recordDecl(isExpansionInMainFile()).bind("parent"))).bind("child"),
-        &recordResolver); 
+        fieldDecl(
+            hasAncestor(recordDecl(isExpansionInMainFile()).bind("parent")))
+            .bind("child"),
+        &recordResolver);
     RecordFinder3.addMatcher(
-        varDecl(hasAncestor(labelStmt(isExpansionInMainFile()).bind("parent"))).bind("child"),
+        varDecl(hasAncestor(labelStmt(isExpansionInMainFile()).bind("parent")))
+            .bind("child"),
         &recordResolver);
     RecordFinder4.addMatcher(
-        varDecl(hasAncestor(functionDecl(isExpansionInMainFile()).bind("parent"))).bind("child"),
+        varDecl(
+            hasAncestor(functionDecl(isExpansionInMainFile()).bind("parent")))
+            .bind("child"),
         &recordResolver);
     // now rewrite the struct definitions by appending the source loc after
     // their name also append the structs which are to be hoisted to struct
@@ -2091,13 +2194,19 @@ public:
     // also recorddecl inside recorddecl must be renamed because when hoisted
     // to global level they give name conflicts.
     RecordRewriteFinder0.addMatcher(
-        recordDecl(hasAncestor(recordDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
+        recordDecl(hasAncestor(recordDecl().bind("parent")),
+                   isExpansionInMainFile())
+            .bind("child"),
         &recordRewriter);
     RecordRewriteFinder.addMatcher(
-        recordDecl(hasAncestor(labelStmt().bind("parent")), isExpansionInMainFile()).bind("child"),
+        recordDecl(hasAncestor(labelStmt().bind("parent")),
+                   isExpansionInMainFile())
+            .bind("child"),
         &recordRewriter);
     RecordRewriteFinder1.addMatcher(
-        recordDecl(hasAncestor(functionDecl().bind("parent")), isExpansionInMainFile()).bind("child"),
+        recordDecl(hasAncestor(functionDecl().bind("parent")),
+                   isExpansionInMainFile())
+            .bind("child"),
         &recordRewriter);
     // rewitrefinder will try to find all the vardecl and try to get  replace
     // text at appropriate places.
@@ -2325,7 +2434,7 @@ private:
   GlobalBuilder globalBuilder;
   LabelFinder labelBuilder;
   LabelRelBuilder labelRelBuilder;
-	StructRelBuilder structRelBuilder;
+  StructRelBuilder structRelBuilder;
   StructBuilder structBuilder;
   StructDumper structDumper;
   CallDepth callDepth;

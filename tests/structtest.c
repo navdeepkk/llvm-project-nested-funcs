@@ -9,10 +9,10 @@ struct s{
 	int a[5][5];
 };
 
-
-int main(){
 	struct s ss;
 	struct s arr[5];
+
+int main(){
 	int b[20][20];
 	foo:{
 			ss.i = 0;
