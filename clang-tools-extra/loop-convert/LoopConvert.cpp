@@ -59,6 +59,7 @@ std::unordered_map<std::string, std::string> callRels;
 // visited labels is for the contructions of decls. marks the parent label stmts
 // visited. in a new matcher this visited labels would not be considered.
 std::unordered_map<std::string, bool> visitedLabels;
+std::unordered_map<std::string, bool> visitedLabelsInRelBuilder;
 // labelbounds has label bounds.
 std::unordered_map<std::string, bounds> labelBounds;
 std::unordered_map<std::string, bounds> structBounds;
@@ -81,6 +82,9 @@ std::unordered_map<std::string, bool> resolvedStruct;
 std::unordered_map<std::string, bool> doNotRename;
 // parenstack is for matching parentheses
 std::stack<char> parenStack;
+// labelNameLenghts is present to remove the assist callresolver
+// and contains the original labelname lengths.
+std::unordered_map<std::string, int> labelNameLength;
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
@@ -199,7 +203,7 @@ public:
       temp.type = vd->getType().getAsString();
       // llvm::errs()<<"globalbuilder\n";
       // llvm::errs()<<vd->getType().getAsString()<<"\n";
-      temp.name = vd->getQualifiedNameAsString();
+      temp.name = vd->getNameAsString();
       globalVars.push_back(temp);
     }
   }
@@ -219,6 +223,19 @@ public:
       loc = loc.substr(0, loc.find(':'));
       sourceLocs[ls->getName() + loc] = loc;
       labels.push_back(ls->getName() + loc);
+			//-----------------------------------------------------//
+			std::string lsName = ls->getName();
+			std::string lsloc = ls->getBeginLoc().printToString(*sm);
+			lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
+			lsloc = lsloc.substr(0, lsloc.find(':'));
+			// findign the end label bounds
+			std::string lsendloc = ls->getEndLoc().printToString(*sm);
+			lsendloc = lsendloc.substr(lsendloc.find(':') + 1, lsendloc.find(':'));
+			lsendloc = lsendloc.substr(0, lsendloc.find(':'));
+			//-----------------------------------------------------//
+			labelBounds[lsName + lsloc].begin = std::stoi(lsloc);
+			labelBounds[lsName + lsloc].end = std::stoi(lsendloc);
+		
       // initialize as !visitedLabels[lsName + lsloc] as false.
       visitedLabels[ls->getName() + loc] = false;
       // llvm::errs()<<loc<<"\n";
@@ -760,6 +777,12 @@ public:
         // lowest depth.
         depths[ls->getName() + locls] = 1;
         depths[fd->getNameAsString() + loclp] = 0;
+        // inserting the length of the original function or label name
+        // into the structure .
+        std::string name = ls->getName();
+        labelNameLength[ls->getName() + locls] = name.length();
+        name = fd->getNameAsString();
+        labelNameLength[fd->getNameAsString() + loclp] = name.length();
       }
     }
   }
@@ -841,14 +864,14 @@ public:
             // inserting into scopes for child label stmt
             // with name stype and scope.
             scopes[elem.first].name = elem.first;
-            scopes[elem.first].vars[vd->getQualifiedNameAsString()] =
+            scopes[elem.first].vars[vd->getNameAsString()] =
                 vd->getType().getAsString();
             // cout<<vd->getQualifierLoc().getBeginLoc().printToString(*sm)<<"\n";
             // cout<<vd->getUnderlyingDecl()->getBeginLoc().printToString(*sm)<<"\n";
             // cout<<vd->getDefinition()->Decl::getBeginLoc().printToString(*sm)<<"\n";
             // cout<<vd->getTypeSourceInfo()->getTypeLoc().getBeginLoc().printToString(*sm)<<"\n";
             // cout<<vd->getTypeSpecStartLoc().printToString(*sm)<<"\n";
-            scopes[elem.first].locs[vd->getQualifiedNameAsString()] = varloc;
+            scopes[elem.first].locs[vd->getNameAsString()] = varloc;
             visitedLabels[elem.second] = true;
           }
         }
@@ -1025,53 +1048,20 @@ public:
             // search in parenchilmap for the label stmt that encloses this call
             // expression. if the label stmt has an immediate label stmt with
             // the same name then the call will resolve to it.
-            // also one case wass missing before here. if the call is to
+            // also one case was missing before here. if the call is to
             // a lable staatement that is at the same depth as the parent and
             // has source location less than it.
-            for (auto elem : parenChilMap) {
-              if (elem.second.compare(lsName + lsloc) == 0) {
-                // the elem has the labelstmt as parent
-                std::string temp = elem.first;
-                // temp capture the name of child labelstmt;
-                temp.erase(remove_if(temp.begin(), temp.end(),
-                                     [](char c) { return !isalpha(c); }),
-                           temp.end());
-                if (temp.compare(callName) == 0) {
-                  resolvedCalls[callName + celoc] = true;
-                  callRels[callName + celoc] = elem.first;
-                  // llvm::errs() << callName + celoc << " " << elem.first <<
-                  // "\n";
-                  break;
-                }
-              }
-            } /*
-             // checking for the missing case. find the parent of the label stmt
-             // which is a paren tof the label stmt.
-             // check for all the label stmt with the same parent. if the name
-             of
-             // the label stmt is the same as of the call expr and
-             sourcelocation
-             // is less than the call then match found.
-             for (auto label : labels) {
-               if (parenChilMap[label].compare(parenChilMap[lsName + lsloc]) ==
-                   0) {
-                 // parent of both the labels is same check if the source loc is
-                 // less than the call expr and also its name is same as
-                 // callexpr.
-                 std::string temp = label;
-                 temp.erase(remove_if(temp.begin(), temp.end(),
-                                      [](char c) { return !isalpha(c); }),
-                            temp.end());
-                 if (temp.compare(callName) == 0) {
-                   // the names are also same. check for location now
-                   if (labelBounds[lsName + lsloc].begin <= stoi(celoc)) {
-                     // yeah matching call found.
-                     resolvedCalls[callName + celoc] = true;
-                     callRels[callName + celoc] = label;
-                   }
-                 }
-               }
-             }*/
+            //---------------------------------------------------------------//
+            //							the call is
+            //global
+            ////
+            //---------------------------------------------------------------//
+            if(find(globalFuncDecls.begin(), globalFuncDecls.end(), callName) != globalFuncDecls.end()){
+							//a global function call;
+						}	
+						else{
+							//throw error;
+						}
           }
         }
       } else if (const FunctionDecl *fd =
@@ -1084,7 +1074,7 @@ public:
         celoc = celoc.substr(celoc.find(':') + 1, celoc.find(':'));
         celoc = celoc.substr(0, celoc.find(':'));
 
-        std::string fdName = fd->getQualifiedNameAsString();
+        std::string fdName = fd->getNameAsString();
         std::string fdloc = fd->getBeginLoc().printToString(*sm);
         fdloc = fdloc.substr(fdloc.find(':') + 1, fdloc.find(':'));
         fdloc = fdloc.substr(0, fdloc.find(':'));
@@ -1098,30 +1088,22 @@ public:
             // search in parenchilmap for the label stmt that encloses this call
             // expression. if the label stmt has an immediate label stmt with
             // the same name then the call will resolve to it. else it will
-            // resolve to a global function
-            bool flag = false;
-            for (auto elem : parenChilMap) {
-              if (elem.second.compare(fdName + fdloc) == 0) {
-                // the elem has the labelstmt as parent
-                std::string temp = elem.first;
-                // temp capture the name of child labelstmt;
-                temp.erase(remove_if(temp.begin(), temp.end(),
-                                     [](char c) { return !isalpha(c); }),
-                           temp.end());
-                if (temp.compare(callName) == 0) {
-                  flag = true;
-                  resolvedCalls[callName + celoc] = true;
-                  callRels[callName + celoc] = elem.first;
-                  // llvm::errs() << callName + celoc << " " << elem.first <<
-                  // "\n";
-                  break;
-                }
-              }
-            }
-            // if call is found anywhere then it resolves to the global call.
-            if (!flag) {
-              // callRels[callName + celoc] = callName;
-            }
+            // resolve to a global function.
+            //-------------------------------------------------------------//
+            //-------------------------------------------------------------//
+            // the above explanation doesnt apply here if the paarent of a
+            // call expr is a functions and it hasent been resolved yet then
+            // it will surely resolve to the global function. the case of
+            // checking at the same depth is not required here. Let it be
+            // for a while.
+            //-------------------------------------------------------------//
+            //-------------------------------------------------------------//
+            if(find(globalFuncDecls.begin(), globalFuncDecls.end(), callName) != globalFuncDecls.end()){
+							//a global function call;
+						}	
+						else{
+							//throw error;
+						}
           }
         }
       }
@@ -1130,32 +1112,54 @@ public:
 
   std::string findCall(std::string ls, std::string target, std::string celoc) {
     std::string temp = ls;
-    // removes digits from the name of the label.
-    ls.erase(
-        remove_if(ls.begin(), ls.end(), [](char c) { return !isalpha(c); }),
-        ls.end());
-    // check if there is matching label or functions decl at depth 1.
-    /*
-    std::string temp2;
-    for (auto depth : depths) {
-                        ///temp2 is for holding the target label name of the
-    label to compare it with the name of the call, because depths has label
-    namescombined with sourceloc. temp2 = depth.first;
-      temp2.erase(remove_if(temp2.begin(), temp2.end(),
-                            [](char c) { return !isalpha(c); }),
-                  temp2.end());
-      if (depth.second == callDepths[target + celoc] && temp2 == target) {
-        return depth.first;
-      }
-    }*/
+    // removes digits from the name of the label after the name of the label.
+    // NOTE::::::::::::::::::::A bug was present in which all digits were
+    // removed. so if the label name had a digit it was also removed and the
+    // was never removed.
+    ls.erase(remove_if(ls.begin() + labelNameLength[ls], ls.end(),
+                       [](char c) { return !isalpha(c); }),
+             ls.end());
     if (depths[temp] == 0) {
+      // only functions are at depth zero if the case below is not satsfied
+      // then the call is must be to some other function which is global.
       if (ls.compare(target) == 0) {
         // if label or functiondecl at depth 0 is same as call then return it.
-        // call resolution successfull mark true.
+        // call resolution successfull mark true. else return 0 and the call
+        // resolve to a global thing.
         resolvedCalls[target + celoc] = true;
         callRels[target + celoc] = temp;
         return temp;
       } else {
+        // checking for the missing case. find the parent of the label stmt
+        // which is a paren tof the label stmt.
+        // check for all the label stmt with the same parent. if the name of
+        // the label stmt is the same as of the call expr and sourcelocation
+        // is less than the call then match found.
+        for (auto label : labels) {
+          // ls is the parent of the callexpr. and label is any label.
+          if (parenChilMap[label].compare(temp) == 0) {
+            // parent of both the labels is same check if the source loc is
+            // less than the call expr and also its name is same as
+            // callexpr.
+            std::string tempLabel = label;
+            tempLabel.erase(
+                remove_if(tempLabel.begin() + labelNameLength[tempLabel],
+                          tempLabel.end(), [](char c) { return !isalpha(c); }),
+                tempLabel.end());
+            //cout<<"incase1 "<<label<<" "<<labelBounds[label].begin<<" "<<celoc<<endl;
+            if (tempLabel.compare(target) == 0) {
+              // the names are also same. check for location now.
+              // the locs can also be equal in this case.
+              if (labelBounds[label].begin <= stoi(celoc)) {
+                // yeah matching call found.
+                resolvedCalls[target + celoc] = true;
+                callRels[target + celoc] = label;
+                return label;
+              }
+            }
+          }
+        }
+        // this is a global call.
         return "0";
       }
     }
@@ -1178,13 +1182,17 @@ public:
           // less than the call expr and also its name is same as
           // callexpr.
           std::string tempLabel = label;
-          tempLabel.erase(remove_if(tempLabel.begin(), tempLabel.end(),
-                                    [](char c) { return !isalpha(c); }),
-                          tempLabel.end());
+          tempLabel.erase(
+              remove_if(tempLabel.begin() + labelNameLength[tempLabel],
+                        tempLabel.end(), [](char c) { return !isalpha(c); }),
+              tempLabel.end());
+          //cout<<"incase3 templabel"<<tempLabel<<" "<<labelBounds[label].begin<<" "<<celoc<<endl;
           if (tempLabel.compare(target) == 0) {
             // the names are also same. check for location now.
             // the locs can also be equal in this case.
-            if (labelBounds[ls].begin <= stoi(celoc)) {
+            //cout<<"incase3 "<<label<<" "<<labelBounds[label].begin<<" "<<celoc<<endl;
+						//here it was a bug earlier it was labelBounds[ls].begin;
+            if (labelBounds[label].begin <= stoi(celoc)) {
               // yeah matching call found.
               resolvedCalls[target + celoc] = true;
               callRels[target + celoc] = label;
@@ -1197,6 +1205,23 @@ public:
           }
         }
       }
+			//now try to find in the children of the parent.
+			for (auto elem : parenChilMap) {
+							//temp is the current parent of the call.
+              if (elem.second.compare(temp) == 0) {
+                // the elem has the labelstmt as parent
+                std::string tempLable = elem.first;
+                // temp capture the name of child labelstmt;
+                tempLable.erase(remove_if(tempLable.begin() + labelNameLength[tempLable], tempLable.end(),
+                                     [](char c) { return !isalpha(c); }),
+                           tempLable.end());
+                if (tempLable.compare(target) == 0 && labelBounds[elem.first].begin <= stoi(celoc)) {
+                  resolvedCalls[target + celoc] = true;
+                  callRels[target + celoc] = elem.first;
+                  return elem.first;
+                }
+              }
+						}
       // if nothing found in the children of the parent of the label stmt
       // then go on to the next parent.
       return findCall(parenChilMap[temp], target, celoc);
@@ -1216,14 +1241,13 @@ public:
         std::string lsName = ls->getName();
         std::string lsloc = ls->getBeginLoc().printToString(*sm);
         lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
+        lsloc = lsloc.substr(0, lsloc.find(':'));
         // findign the end label bounds
         std::string lsendloc = ls->getEndLoc().printToString(*sm);
         lsendloc = lsendloc.substr(lsendloc.find(':') + 1, lsendloc.find(':'));
         lsendloc = lsendloc.substr(0, lsendloc.find(':'));
         // inserting the label bounds into the labelBounds.
         // llvm::errs() << lsName << " " << lsloc << " " << lsendloc << "\n";
-        labelBounds[lsName + lsloc].begin = std::stoi(lsloc);
-        labelBounds[lsName + lsloc].end = std::stoi(lsendloc);
 
         // llvm::errs() << "hello from lastlabel\n";
         lsloc = lsloc.substr(0, lsloc.find(':'));
@@ -1241,9 +1265,9 @@ public:
         // function. second is the parent first is child. marking the parent
         // as true visited.
         decls[lsName + lsloc].name = lsName + lsloc;
-        decls[lsName + lsloc].vars[vd->getQualifiedNameAsString()] =
+        decls[lsName + lsloc].vars[vd->getNameAsString()] =
             vd->getType().getAsString();
-        decls[lsName + lsloc].locs[vd->getQualifiedNameAsString()] = varloc;
+        decls[lsName + lsloc].locs[vd->getNameAsString()] = varloc;
       }
     }
   }
@@ -2264,13 +2288,12 @@ llvm::errs() << sl.first << " " << sl.second << " ";
             llvm::errs()<<label<<" ";
     }
 */
-    /*
-         llvm::errs() << "parenchil:\n";
-         for (auto chil : parenChilMap) {
-           llvm::errs() << chil.first << " " << chil.second << "\n";
-         }
-    */
-
+/*
+    llvm::errs() << "parenchil:\n";
+    for (auto chil : parenChilMap) {
+      llvm::errs() << chil.first << " " << chil.second << "\n";
+    }
+*/
     /*
          for (auto loc : sourceLocs) {
            llvm::errs() << loc.first << " " << loc.second << "\n";
