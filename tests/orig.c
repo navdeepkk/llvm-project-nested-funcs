@@ -17,6 +17,8 @@ void main(){
 
 	foo();
 
+	foo();
+
 	printf("x is: %d\n", x);
 
 }

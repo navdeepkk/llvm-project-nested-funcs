@@ -45,70 +45,56 @@ public:
       auto beginloc = td->getBeginLoc();
       auto endloc = td->getEndLoc();
       std::string tdname = td->getUnderlyingType().getAsString();
-      //cou << tdname << " hasbody " << td->getUnderlyingType().getAsString()
-      //     << " " << td->getUnderlyingType().getCanonicalType().getAsString();
+			//cout<<tdname<<" hasbody "<<td->hasBody();
       // if struct is not present in theunderlying type not the
       // canonical type the remove this typedef.
       if (tdname.find("struct") == std::string::npos) {
         Rewrite.ReplaceText(td->getSourceRange(), "");
-        // removing the left out ';' from the end.
+				//removing the left out ';' from the end.
         auto loc = clang::Lexer::findNextToken(endloc, Rewrite.getSourceMgr(),
                                                Rewrite.getLangOpts())
                        ->getLocation();
 
         Rewrite.ReplaceText(loc, "");
       } else {
-        // if struct is present in the undderlying type and the canonical
-        // type is same as underlying type then also remove it.
-        if (td->getUnderlyingType().getAsString().compare(
-                td->getUnderlyingType().getCanonicalType().getAsString()) ==
-            0) {
-          Rewrite.ReplaceText(td->getSourceRange(), "");
-          // removing the left out ';' from the end.
-          auto loc = clang::Lexer::findNextToken(endloc, Rewrite.getSourceMgr(),
-                                                 Rewrite.getLangOpts())
-                         ->getLocation();
+        // replace the typedef with struct + structname. and remove
+        // the struct name from the end;
+        Rewrite.ReplaceText(beginloc, "");
+        auto loc = clang::Lexer::findNextToken(beginloc, Rewrite.getSourceMgr(),
+                                               Rewrite.getLangOpts())
+                       ->getLocation();
+        Rewrite.ReplaceText(loc, td->getUnderlyingType().getAsString());
 
-          Rewrite.ReplaceText(loc, "");
-        } else {
-          // replace the typedef with struct + structname. and remove
-          // the struct name from the end;
-          Rewrite.ReplaceText(td->getBeginLoc(), "");
-          auto loc =
-              clang::Lexer::findNextToken(beginloc, Rewrite.getSourceMgr(),
-                                          Rewrite.getLangOpts())
-                  ->getLocation();
-          Rewrite.ReplaceText(loc, td->getUnderlyingType().getAsString());
-
-          // now remove the identifier name from the end;
-          loc = td->getUnderlyingDecl()->getEndLoc();
-          Rewrite.ReplaceText(loc, "");
-        }
+        // now remove the identifier name from the end;
+        loc = td->getUnderlyingDecl()->getEndLoc();
+        Rewrite.ReplaceText(loc, "");
       }
     }
     if (const DeclStmt *ds =
             Result.Nodes.getNodeAs<clang::DeclStmt>("declstmt")) {
       // Assumption: The CFG has one DeclStmt per Decl.
       const VarDecl *vd = dyn_cast_or_null<VarDecl>(*ds->decl_begin());
-      stringstream buff;
+			stringstream buff;
       std::string canonicaltype;
-      if (vd != NULL) {
-        buff.str("");
+      std::string underlyingtype;
+			if (vd != NULL) {
+				buff.str("");
         // first check if the type contains int float struct etc.
         auto type = vd->getType().getAsString();
-        //cout << vd->getNameAsString() << " type " << type << "\n";
+        cout << vd->getNameAsString() << " type " << type << "\n";
         if (type.find("int") != 0 && type.find("float") != 0 &&
             type.find("struct") != 0) {
           canonicaltype = vd->getType().getCanonicalType().getAsString();
-          //cout << vd->getNameAsString() << " canonicaltype " << canonicaltype
-          //     << "\n";
-          if (canonicaltype.find("int") != 0 &&
-              canonicaltype.find("float") != 0 &&
-              canonicaltype.find("struct") != 0) {
-            // these are possibly structs which were anonymus in there
-            // declaration.
-            buff << "struct ";
-          }
+          cout << vd->getNameAsString() << " canonicaltype " << canonicaltype
+               << "\n";
+					underlyingtype = vd->getUnderlyingDecl()->getNameAsString();
+          cout << vd->getNameAsString() << " underlyingameddecl " << underlyingtype
+               << "\n";
+        if (canonicaltype.find("int") != 0 && canonicaltype.find("float") != 0 &&
+            canonicaltype.find("struct") != 0) {
+						//these are possibly structs which were anonymus in there declaration.
+						buff<<"struct ";	
+					}
           // Replace the first of declsmt token with the canonical type;
           if (canonicaltype.find('[') != std::string::npos) {
             canonicaltype = canonicaltype.substr(0, canonicaltype.find('['));
@@ -116,7 +102,7 @@ public:
           Rewrite.ReplaceText(ds->getBeginLoc(), buff.str() + canonicaltype);
         }
       }
-      buff.str("");
+			buff.str("");
     }
   }
   Rewriter &Rewrite;

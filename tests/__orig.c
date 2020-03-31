@@ -2,9 +2,9 @@ struct s_foo10 {
 int * x;
 };
 
-
-
 void foo10( struct s_foo10*);
+
+
 //intended output
 //3 4 5 6 
 
@@ -18,9 +18,10 @@ struct s_foo10 sfoo10;
 sfoo10.x = &x;
 
 
-
 	foo10(&sfoo10);
 	
+	foo10(&sfoo10);
+
 	foo10(&sfoo10);
 
 	foo10(&sfoo10);

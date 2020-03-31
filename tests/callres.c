@@ -5,6 +5,11 @@
 
 int a;
 
+void foo(){
+	printf("in global foo!!!\n");
+}
+
+
 void bar(){
 	int a;
 	foebar:{
@@ -14,6 +19,7 @@ void bar(){
 	foe:{
 	int y, x;
 	foo:{
+		printf("in foo inside foe!!!\n");
 		foobar:{
 			a;								
 			x = x + 1;
@@ -28,6 +34,15 @@ foe();
 
 
 int main(){
-bar();
-return 0;
+
+	foo();
+
+	foo:{
+		printf("in foo inside main!!!\n");
+	}
+
+	foo();
+
+	bar();
+	return 0;
 }

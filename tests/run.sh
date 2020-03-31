@@ -2,6 +2,9 @@
 
 cp $1 ~/temp.c
 
+#../build/bin/preprep ~/temp.c > __z.c
+#rm ~/temp.c
+
 ../build/bin/prep ~/temp.c > __y.c
 rm ~/temp.c
 

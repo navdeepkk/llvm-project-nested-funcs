@@ -7,10 +7,10 @@ int * res;
 int * b;
 };
 
-
-
 void foo9( struct s_foo9*);
 void fact14( struct s_fact14*);
+
+
 //intended output
 //first change b to the number of which factorial is calculated
 //output: factorial of that number
@@ -20,7 +20,6 @@ void fact14( struct s_fact14*);
 int main() {
 
 struct s_foo9 sfoo9;
-
 
 	foo9(&sfoo9);
   return 0;

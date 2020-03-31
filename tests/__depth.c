@@ -1,29 +1,28 @@
 struct s_r9 {
-int* a;
 };
 
-struct s_p11 {
+struct s_p13 {
 struct s_r9 *__s;
-int* b;
+int * b;
 };
 
-struct s_q17 {
-struct s_p11 *__s;
-int* c;
-int* b;
+struct s_q21 {
+struct s_p13 *__s;
+int * c;
+int * a;
 };
 
-struct s_s19 {
-struct s_q17 *__s;
-int* d;
+struct s_s25 {
+struct s_q21 *__s;
+int * d;
 };
-
-
 
 void r9( struct s_r9*);
-void p11( struct s_p11*);
-void q17( struct s_q17*);
-void s19( struct s_s19*);
+void p13( struct s_p13*);
+void q21( struct s_q21*);
+void s25( struct s_s25*);
+
+
 //intended output
 //4 3 2 1 0
 
@@ -31,10 +30,8 @@ void s19( struct s_s19*);
 #include<stdio.h>
 
 void main(){
-    int a;
-    struct s_r9 sr9;
-sr9.a = &a;
-
+    
+struct s_r9 sr9;
 
     r9(&sr9);
 }
@@ -42,38 +39,45 @@ sr9.a = &a;
 
 
 void r9( struct s_r9* __s ){
-        int b = 5;
-            struct s_p11 sp11;
-sp11.__s = __s;
-sp11.b = &b;
 
-        p11(&sp11);    
+        int b = 5;
+            
+struct s_p13 sp13;
+sp13.__s = __s;
+sp13.b = &b;
+
+        p13(&sp13);    
     }
 
-void p11( struct s_p11* __s ){
-								static int b = 5;
-                b--;
-                printf("%d \n", b);
-                if(b==0) return;
-                int c;
-                struct s_q17 sq17;
-sq17.__s = __s;
-sq17.c = &c;
-sq17.b = &b;
+void p13( struct s_p13* __s ){
 
-                q17(&sq17);
+								int a = 0;
+                (*(__s->b))--;
+                printf("b:%d a:%d\n",a ,(*(__s->b)));
+                if((*(__s->b))==0) return;
+                int c;
+                
+struct s_q21 sq21;
+sq21.__s = __s;
+sq21.c = &c;
+sq21.a = &a;
+
+                q21(&sq21);
             }
 
-void q17( struct s_q17* __s ){
-                    int d;
-                    struct s_s19 ss19;
-ss19.__s = __s;
-ss19.d = &d;
+void q21( struct s_q21* __s ){
 
-                    s19(&ss19);
+                    int d;
+                    
+struct s_s25 ss25;
+ss25.__s = __s;
+ss25.d = &d;
+
+                    s25(&ss25);
                 }
 
-void s19( struct s_s19* __s ){
-                        p11(__s->__s->__s);
+void s25( struct s_s25* __s ){
+
+                        p13(__s->__s->__s);
                     }
 

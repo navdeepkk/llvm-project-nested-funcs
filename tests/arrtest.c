@@ -12,15 +12,15 @@ int main(){
 							bar:{
 							if(i == 0){
                 for(ij = 0; ij < 2; ij++){
-                       a[ij][ij][ij] = 5;
-												b[ij] = ij;
+                       a[ij + ij + ij] [ij + ij + ij] [ij +ij +ij] = 5;
+												b[ij + ij] = ij;
                 }
 							}
 							else if(i == 1){
 									for(ij = 0; ij < 2; ij++){
-									printf("%d ", a[b[ij]][b[ij]][b[ij]]);
-									printf("\n");
+									printf("%d ", a[b[ij + ij] + ij + ij] [b[ij + ij] + ij + ij] [b[ij + ij] + ij + ij]);
 								}
+								printf("\n");	
 							}
             }
 	bar();
