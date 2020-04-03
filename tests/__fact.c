@@ -1,54 +1,62 @@
-struct s_foo9 {
+struct s_foo17 {
 };
 
-struct s_fact14 {
-struct s_foo9 *__s;
+struct s_fact22 {
+struct s_foo17 *__s;
 int * res;
 int * b;
 };
 
-void foo9( struct s_foo9*);
-void fact14( struct s_fact14*);
+void foo17( struct s_foo17*);
+void fact22( struct s_fact22*);
 
 
-//intended output
-//first change b to the number of which factorial is calculated
-//output: factorial of that number
+//------------------------------------------//
+// This test case demostrates the tools cap // 
+// ability to support direct recursion. the //
+// code computes the factorial of a number  //
+// which is to be stored in the variable b. //
+// Note that b is not present in the scope  //
+// of the label fact and it is captured fro //
+// m the enclosing scope.                   //
+// EXPECTED OUTPUT													//
+// factorial is: 120                        //
+//------------------------------------------//
 
 #include <stdio.h>
 
 int main() {
 
-struct s_foo9 sfoo9;
+struct s_foo17 sfoo17;
 
-	foo9(&sfoo9);
+	foo17(&sfoo17);
   return 0;
 }
 
 
-void foo9( struct s_foo9* __s )  {
+void foo17( struct s_foo17* __s )  {
 
   int b = 5;
   int res = 1;
 
-struct s_fact14 sfact14;
-sfact14.__s = __s;
-sfact14.res = &res;
-sfact14.b = &b;
+struct s_fact22 sfact22;
+sfact22.__s = __s;
+sfact22.res = &res;
+sfact22.b = &b;
 
 
-  fact14(&sfact14);
+  fact22(&sfact22);
   printf("factorial is: %d \n", res);
 }
 
-void fact14( struct s_fact14* __s )  {
+void fact22( struct s_fact22* __s )  {
 
   if ((*(__s->b)) == 1) {
     return;
   } else {
     (*(__s->res)) *= (*(__s->b));
     (*(__s->b))--;
-    fact14(__s);
+    fact22(__s);
   }
 }
 

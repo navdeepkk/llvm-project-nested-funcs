@@ -9,17 +9,17 @@ struct s_foe46 {
 struct s_foo30 *__s;
 };
 
-struct point33{
+struct point34{
 
 			int x, y;
 		};
 
-struct point5{
+struct point6{
 
 		int x, y;
 	};
 
-struct point25{
+struct point26{
 
 			int x, y;
 		};
@@ -35,7 +35,7 @@ void hey(){
 	
 
 
-	struct point5 p;
+	struct point6 p;
 		p.x = 3;
 		p.y = 3;
 		printf("%d %d\n", p.x, p.y);
@@ -55,7 +55,7 @@ int main(){
 struct s_foo30 sfoo30;
 
 	foo30(&sfoo30);
-			struct point25 p2;
+			struct point26 p2;
 			p2.x = 2;
 			p2.y = 2;
 			printf("%d %d\n", p2.x, p2.y);
@@ -83,7 +83,7 @@ sfoe46.__s = __s;
 
 void bar38( struct s_bar38* __s ){
 
-			struct point33 p1;
+			struct point34 p1;
 			p1.x = 1;
 			p1.y = 1;
 			printf("%d %d\n", p1.x, p1.y);
@@ -91,7 +91,7 @@ void bar38( struct s_bar38* __s ){
 
 void foe46( struct s_foe46* __s ){
 
-			struct point33 p2;
+			struct point34 p2;
 			p2.x = 2;
 			p2.y = 2;
 			printf("%d %d\n", p2.x, p2.y);

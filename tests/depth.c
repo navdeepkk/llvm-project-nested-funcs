@@ -1,22 +1,32 @@
-//intended output
-//4 3 2 1 0
-
+//------------------------------------------//
+// This test case show a case of Indirect   //
+// recursion between functions at arbitrary //
+// depths. The innermost function can call  //
+// any of the functions that are in its     //
+// scope.                                   //
+// EXPECTED OUTPUT													//
+// b:4 a:0                                  //
+// b:3 a:0                                  //
+// b:2 a:0                                  //
+// b:1 a:0                                  //
+// b:0 a:0                                  //
+//------------------------------------------//
 
 #include<stdio.h>
 
-void main(){
+int main(){
     r:{
         int b = 5;
             p:{
 								int a = 0;
                 b--;
-                printf("b:%d a:%d\n",a ,b);
+                printf("b:%d a:%d\n",b ,a);
                 if(b==0) return;
                 int c;
                 q:{
                     int d;
                     s:{
-                        p();
+                        p();								//calls p at which is defined outside s.
                     }
                     s();
                 }
@@ -25,5 +35,6 @@ void main(){
         p();    
     }
     r();
+return 0;
 }
 

@@ -1,11 +1,10 @@
 #include<stdio.h>
 
-void foo(){
-	int x;
-}
-
 int main(){
-	foo();
+	struct point{
+		int x, y;		
+	};
 	
+	struct point p; 
 return 0;
 }

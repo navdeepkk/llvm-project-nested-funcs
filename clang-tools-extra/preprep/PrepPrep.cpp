@@ -60,6 +60,7 @@ public:
       } else {
         // if struct is present in the undderlying type and the canonical
         // type is same as underlying type then also remove it.
+        // find the record decl in its children.
         if (td->getUnderlyingType().getAsString().compare(
                 td->getUnderlyingType().getCanonicalType().getAsString()) ==
             0) {

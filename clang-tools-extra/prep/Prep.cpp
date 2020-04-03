@@ -40,68 +40,128 @@ public:
   LabelFinder(Rewriter &Rewrite) : Rewrite(Rewrite) {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     if (const LabelStmt *ls =
-				Result.Nodes.getNodeAs<clang::LabelStmt>("label")) {
-				Rewrite.InsertText(ls->getBeginLoc(), "\n");
-				auto loc = ls->getBeginLoc();
-				while (1) {
-					if (std::strcmp(clang::Lexer::findNextToken(
-															loc, Rewrite.getSourceMgr(),
-															Rewrite.getLangOpts())
-															->getName(),
-													"l_brace") == 0) {
-						break;
-					}
-					loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-																						Rewrite.getLangOpts())
-										->getLocation();
-				}
-				loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-																					Rewrite.getLangOpts())
-									->getLocation();
+            Result.Nodes.getNodeAs<clang::LabelStmt>("label")) {
+      Rewrite.InsertText(ls->getBeginLoc(), "\n");
+      auto loc = ls->getBeginLoc();
+      while (1) {
+        if (std::strcmp(clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                                    Rewrite.getLangOpts())
+                            ->getName(),
+                        "l_brace") == 0) {
+          break;
+        }
+        loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                          Rewrite.getLangOpts())
+                  ->getLocation();
+      }
+      loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                        Rewrite.getLangOpts())
+                ->getLocation();
 
-				Rewrite.InsertTextAfterToken(loc, "\n");	
-		}
-    if (const RecordDecl *ls =
-				Result.Nodes.getNodeAs<clang::RecordDecl>("record")) {
-				Rewrite.InsertText(ls->getBeginLoc(), "\n");
-				auto loc = ls->getBeginLoc();
-				while (1) {
-					if (std::strcmp(clang::Lexer::findNextToken(
-															loc, Rewrite.getSourceMgr(),
-															Rewrite.getLangOpts())
-															->getName(),
-													"l_brace") == 0) {
-						break;
-					}
-					loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-																						Rewrite.getLangOpts())
-										->getLocation();
-				}
-				loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
-																					Rewrite.getLangOpts())
-									->getLocation();
+      Rewrite.InsertTextAfterToken(loc, "\n");
+    } else if (const RecordDecl *ls =
+                   Result.Nodes.getNodeAs<clang::RecordDecl>("record")) {
+      Rewrite.InsertText(ls->getBeginLoc(), "\n");
+      auto loc = ls->getBeginLoc();
+      while (1) {
+        if (std::strcmp(clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                                    Rewrite.getLangOpts())
+                            ->getName(),
+                        "l_brace") == 0) {
+          break;
+        }
+        loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                          Rewrite.getLangOpts())
+                  ->getLocation();
+      }
+      loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(),
+                                        Rewrite.getLangOpts())
+                ->getLocation();
 
-				Rewrite.InsertTextAfterToken(loc, "\n");	
-		}
+      Rewrite.InsertTextAfterToken(loc, "\n");
+    } else if (const DeclStmt *ds =
+                   Result.Nodes.getNodeAs<clang::DeclStmt>("decl")) {
+      bool flag = false;
+      std::stringstream buff;
+      // iterate through all the children and find if record decl is present
+      // then vardecl of the type record decl is present.
+      for (auto decl = ds->decl_begin(); decl < ds->decl_end(); decl++) {
+        if (const RecordDecl *rd = dyn_cast_or_null<RecordDecl>(*decl)) {
+					buff<<Rewrite.getRewrittenText(rd->getSourceRange())<<";";
+					flag = true;
+        }
+      }
+      if (flag) {
+        // not sure in what order the children are visited so visitng once
+        // again.
+        for (auto decl = ds->decl_begin(); decl < ds->decl_end(); decl++) {	
+          if (const VarDecl *vd = dyn_cast_or_null<VarDecl>(*decl)) {
+            //Rewrite.ReplaceText(vd->getEndLoc(), "");
+            // remove the following ',', removes';' also.
+            //Rewrite.ReplaceText(
+            //    clang::Lexer::findNextToken(vd->Decl::getEndLoc(),
+            //                                Rewrite.getSourceMgr(),
+            //                                Rewrite.getLangOpts())
+            //        ->getLocation(),
+            //    "");
+            // convert into a definition of a stuct and insert this into buff
+            // to print it at the end of the decl stmt.
+            auto type = vd->getType().getAsString();
+            if (type.find("struct") == 0) {
+              // if it is not of array type then just insert the var name
+              // after the end of the type.
+              if (type.find('[') == std::string::npos) {
+                type.append(" ");
+                type.append(vd->getNameAsString());
+                buff << "\n" << type << ";\n";
+              } else {
+                type.insert(type.find('['), vd->getNameAsString());
+                buff << "\n" << type << ";\n";
+              }
+            }
+          }
+        }
+				//insert buff at end of the decl stmt;
+				if(!buff.str().empty()){
+					//removing the decl stmt.
+					Rewrite.ReplaceText(ds->getSourceRange(),buff.str());	
+					/*
+            Rewrite.ReplaceText(
+                clang::Lexer::findNextToken(ds->getEndLoc(),
+                                            Rewrite.getSourceMgr(),
+                                            Rewrite.getLangOpts())
+                    ->getLocation(),
+                buff.str());
+					*/
+					//Rewrite.InsertTextAfter(decendloc, buff.str());
+				}
+				buff.str("");
+      }
+    }
   }
   Rewriter &Rewrite;
 };
 //-------------------------------------------------------------------------------------------------------------------------//
 class MyASTConsumer : public ASTConsumer {
 public:
-  MyASTConsumer(Rewriter &R)
-      : labelBuilder(R) {
-    Finder.addMatcher(labelStmt(isExpansionInMainFile()).bind("label"), &labelBuilder);
-		Finder.addMatcher(recordDecl(isExpansionInMainFile()).bind("record"), &labelBuilder);
+  MyASTConsumer(Rewriter &R) : labelBuilder(R) {
+    Finder.addMatcher(labelStmt(isExpansionInMainFile()).bind("label"),
+                      &labelBuilder);
+    Finder.addMatcher(recordDecl(isExpansionInMainFile()).bind("record"),
+                      &labelBuilder);
+    Finder2.addMatcher(declStmt(isExpansionInMainFile()).bind("decl"),
+                       &labelBuilder);
   }
 
   void HandleTranslationUnit(ASTContext &Context) override {
     Finder.matchAST(Context);
+    Finder2.matchAST(Context);
   }
 
 private:
   LabelFinder labelBuilder;
   MatchFinder Finder;
+  MatchFinder Finder2;
 };
 
 //------------------------------------------------------------------------------------------------------------

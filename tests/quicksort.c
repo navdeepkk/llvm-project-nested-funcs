@@ -1,5 +1,13 @@
-//intended output
-//the array items should be sorted
+//------------------------------------------//
+// This is a working example of quicksort   //
+// which takes input the array items, and 	//
+// prints it out sorted. This example demos //
+// strates the support for recursion, arrays//
+// and also shows call resoltion is working //
+// as expected.                             //
+// EXPECTED OUTPUT                          //
+// array items is sorted order.             //
+//------------------------------------------//
 
 #include<stdio.h>
 
@@ -11,7 +19,6 @@ void sort () {
     quickSort: {
 				int p, q;
         swap: {
-						//printf("swapping %d %d\n", p, q);
             int tmp = items[p];
             items[p] = items[q];
             items[q] = tmp;
@@ -34,7 +41,6 @@ void sort () {
 						p = index;	
 						q = last;
             swap();
-						//printf("pivotIndex is %d\n", index);
 						pivotIndex = index;
         }
 
@@ -42,17 +48,14 @@ void sort () {
             partition();
 						int temp = last;
 						last = pivotIndex - 1;
-						//printf("calling qsort with %d %d\n", first, last);
             quickSort();
 						first = pivotIndex + 1;
 						last = temp;
-						//printf("calling qsort with %d %d\n", first, last);
             quickSort();
         }
     }
 		first = 0; 
 		last = size - 1;
-		//printf("calling qsort with %d %d\n", first, last);
     quickSort();
 
 		int i;

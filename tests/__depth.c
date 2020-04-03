@@ -1,83 +1,95 @@
-struct s_r9 {
+struct s_r20 {
 };
 
-struct s_p13 {
-struct s_r9 *__s;
+struct s_p24 {
+struct s_r20 *__s;
 int * b;
 };
 
-struct s_q21 {
-struct s_p13 *__s;
+struct s_q32 {
+struct s_p24 *__s;
 int * c;
 int * a;
 };
 
-struct s_s25 {
-struct s_q21 *__s;
+struct s_s36 {
+struct s_q32 *__s;
 int * d;
 };
 
-void r9( struct s_r9*);
-void p13( struct s_p13*);
-void q21( struct s_q21*);
-void s25( struct s_s25*);
+void r20( struct s_r20*);
+void p24( struct s_p24*);
+void q32( struct s_q32*);
+void s36( struct s_s36*);
 
 
-//intended output
-//4 3 2 1 0
-
+//------------------------------------------//
+// This test case show a case of Indirect   //
+// recursion between functions at arbitrary //
+// depths. The innermost function can call  //
+// any of the functions that are in its     //
+// scope    
+// 
+// EXPECTED OUTPUT													//
+// b:4 a:0                                  //
+// b:3 a:0                                  //
+// b:2 a:0                                  //
+// b:1 a:0                                  //
+// b:0 a:0                                  //
+//------------------------------------------//
 
 #include<stdio.h>
 
-void main(){
+int main(){
     
-struct s_r9 sr9;
+struct s_r20 sr20;
 
-    r9(&sr9);
+    r20(&sr20);
+return 0;
 }
 
 
 
-void r9( struct s_r9* __s ){
+void r20( struct s_r20* __s ){
 
         int b = 5;
             
-struct s_p13 sp13;
-sp13.__s = __s;
-sp13.b = &b;
+struct s_p24 sp24;
+sp24.__s = __s;
+sp24.b = &b;
 
-        p13(&sp13);    
+        p24(&sp24);    
     }
 
-void p13( struct s_p13* __s ){
+void p24( struct s_p24* __s ){
 
 								int a = 0;
                 (*(__s->b))--;
-                printf("b:%d a:%d\n",a ,(*(__s->b)));
+                printf("b:%d a:%d\n",(*(__s->b)) ,a);
                 if((*(__s->b))==0) return;
                 int c;
                 
-struct s_q21 sq21;
-sq21.__s = __s;
-sq21.c = &c;
-sq21.a = &a;
+struct s_q32 sq32;
+sq32.__s = __s;
+sq32.c = &c;
+sq32.a = &a;
 
-                q21(&sq21);
+                q32(&sq32);
             }
 
-void q21( struct s_q21* __s ){
+void q32( struct s_q32* __s ){
 
                     int d;
                     
-struct s_s25 ss25;
-ss25.__s = __s;
-ss25.d = &d;
+struct s_s36 ss36;
+ss36.__s = __s;
+ss36.d = &d;
 
-                    s25(&ss25);
+                    s36(&ss36);
                 }
 
-void s25( struct s_s25* __s ){
+void s36( struct s_s36* __s ){
 
-                        p13(__s->__s->__s);
+                        p24(__s->__s->__s);								//calls p at which is defined outside s.
                     }
 

@@ -4,7 +4,7 @@ void fun();
 
 typedef struct {
 		int x, y;
-	}point;
+	}point/*hdfkjs*/;
 
 typedef point pnt;
 
@@ -12,10 +12,11 @@ typedef point pnt;
 
 struct location{
 	int x,y;
-};
+}loc1, loc2;
 
-typedef struct location loc;
+typedef const struct location loc;
 
+//does not work for this type of typedef.
 typedef struct xxxx{
 	int x, y;
 }yes;

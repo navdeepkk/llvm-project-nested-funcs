@@ -85,6 +85,10 @@ std::stack<char> parenStack;
 // labelNameLenghts is present to remove the assist callresolver
 // and contains the original labelname lengths.
 std::unordered_map<std::string, int> labelNameLength;
+// the below vector is of objects of location type to prevent rewriting
+// of structure names multiple times.
+std::vector<std::string> writtenLocs;
+
 static llvm::cl::OptionCategory MyToolCategory("my-tool options");
 static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 static cl::extrahelp MoreHelp("\nMore help text...\n");
@@ -97,6 +101,7 @@ std::unordered_map<std::string, bool> structMade;
 // renamedStruct is utility for structdump;
 std::unordered_map<std::string, bool> renamedStruct;
 std::unordered_map<std::string, std::string> newName;
+std::unordered_map<std::string, bool> renamedWhileResolving;
 // marked call depths is utility for finding call depths, marks all the calls as
 // true. so they are not processed again.
 std::unordered_map<std::string, bool> resolvedCalls;
@@ -145,6 +150,12 @@ void structDump() {
           if (var.second.find("struct") != std::string::npos &&
               renamedStruct[var.first + std::to_string(scopes[label.first]
                                                            .locs[var.first])]) {
+						//check for any qualifiers in the var.second.
+						std::string temp =var.second;
+						temp = temp.substr(0, temp.find("struct"));
+						if(!temp.empty()){
+							ss<<temp<<" ";	
+						}
             ss << "struct "
                << newName[var.first +
                           std::to_string(scopes[label.first].locs[var.first])]
@@ -160,6 +171,12 @@ void structDump() {
           if (var.second.find("struct") != std::string::npos &&
               renamedStruct[var.first + std::to_string(scopes[label.first]
                                                            .locs[var.first])]) {
+						//check for any qualifiers in the var.second.
+						std::string temp =var.second;
+						temp = temp.substr(0, temp.find("struct"));
+						if(!temp.empty()){
+							ss<<temp<<" ";	
+						}
             ss << "struct "
                << newName[var.first +
                           std::to_string(scopes[label.first].locs[var.first])]
@@ -223,19 +240,19 @@ public:
       loc = loc.substr(0, loc.find(':'));
       sourceLocs[ls->getName() + loc] = loc;
       labels.push_back(ls->getName() + loc);
-			//-----------------------------------------------------//
-			std::string lsName = ls->getName();
-			std::string lsloc = ls->getBeginLoc().printToString(*sm);
-			lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
-			lsloc = lsloc.substr(0, lsloc.find(':'));
-			// findign the end label bounds
-			std::string lsendloc = ls->getEndLoc().printToString(*sm);
-			lsendloc = lsendloc.substr(lsendloc.find(':') + 1, lsendloc.find(':'));
-			lsendloc = lsendloc.substr(0, lsendloc.find(':'));
-			//-----------------------------------------------------//
-			labelBounds[lsName + lsloc].begin = std::stoi(lsloc);
-			labelBounds[lsName + lsloc].end = std::stoi(lsendloc);
-		
+      //-----------------------------------------------------//
+      std::string lsName = ls->getName();
+      std::string lsloc = ls->getBeginLoc().printToString(*sm);
+      lsloc = lsloc.substr(lsloc.find(':') + 1, lsloc.find(':'));
+      lsloc = lsloc.substr(0, lsloc.find(':'));
+      // findign the end label bounds
+      std::string lsendloc = ls->getEndLoc().printToString(*sm);
+      lsendloc = lsendloc.substr(lsendloc.find(':') + 1, lsendloc.find(':'));
+      lsendloc = lsendloc.substr(0, lsendloc.find(':'));
+      //-----------------------------------------------------//
+      labelBounds[lsName + lsloc].begin = std::stoi(lsloc);
+      labelBounds[lsName + lsloc].end = std::stoi(lsendloc);
+
       // initialize as !visitedLabels[lsName + lsloc] as false.
       visitedLabels[ls->getName() + loc] = false;
       // llvm::errs()<<loc<<"\n";
@@ -353,12 +370,15 @@ public:
           // cout << "rewriting record " << rd->getNameAsString() << " " <<
           // locrd
           //  << endl;
+          std::string loc = clang::Lexer::findNextToken(rdc->getBeginLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation().printToString(*sm);
+					if(!renamedWhileResolving[loc]){
           Rewrite.InsertTextAfterToken(
               clang::Lexer::findNextToken(rdc->getBeginLoc(),
                                           Rewrite.getSourceMgr(),
                                           Rewrite.getLangOpts())
                   ->getLocation(),
               locrdc);
+					}
           // structBuff << Rewrite.getRewrittenText(rdc->getSourceRange()) <<
           // ";\n";
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
@@ -381,12 +401,15 @@ public:
           // cout << "rewriting record " << rd->getNameAsString() << " " <<
           // locrd
           //  << endl;
+          std::string loc = clang::Lexer::findNextToken(rd->getBeginLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation().printToString(*sm);
+					if(!renamedWhileResolving[loc]){
           Rewrite.InsertTextAfterToken(
               clang::Lexer::findNextToken(rd->getBeginLoc(),
                                           Rewrite.getSourceMgr(),
                                           Rewrite.getLangOpts())
                   ->getLocation(),
               locrd);
+					}
           structBuff << Rewrite.getRewrittenText(rd->getSourceRange())
                      << ";\n\n";
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
@@ -409,12 +432,15 @@ public:
             // cout << "rewriting record " << rd->getNameAsString() << " " <<
             // locrd
             // << endl;
+           std::string loc = clang::Lexer::findNextToken(rd->getBeginLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation().printToString(*sm);
+           if(!renamedWhileResolving[loc]){ 
             Rewrite.InsertTextAfterToken(
                 clang::Lexer::findNextToken(rd->getBeginLoc(),
                                             Rewrite.getSourceMgr(),
                                             Rewrite.getLangOpts())
                     ->getLocation(),
                 locrd);
+						}
             structBuff << Rewrite.getRewrittenText(rd->getSourceRange())
                        << ";\n\n";
             // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
@@ -435,26 +461,6 @@ public:
   RecordResolver(Rewriter &Rewrite) : Rewrite(Rewrite) {}
   virtual void run(const MatchFinder::MatchResult &Result) {
     SourceManager *sm = Result.SourceManager;
-    // the case below is not possible no vardecl inside struct.
-    /*
-        if (const RecordDecl *rd =
-                Result.Nodes.getNodeAs<clang::RecordDecl>("parent")) {
-          if (const VarDecl *vd =
-       Result.Nodes.getNodeAs<clang::VarDecl>("child")) { std::string type =
-       vd->getType().getAsString(); if (type.find("struct") !=
-       std::string::npos) {
-              // this is a struct vardecl which is inside a structure
-              // hence it should not be renamed.
-              std::string vdName = vd->getNameAsString();
-              std::string vdloc = vd->getBeginLoc().printToString(*sm);
-              vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
-              vdloc = vdloc.substr(0, vdloc.find(':'));
-              doNotRename[vdName + vdloc] = true;
-              cout << "donotrename var" << vdName <<" "<< vdloc << endl;
-            }
-          }
-        }
-    */
     if (const RecordDecl *rdp =
             Result.Nodes.getNodeAs<clang::RecordDecl>("parent")) {
       if (const RecordDecl *rdc =
@@ -487,11 +493,13 @@ public:
 
         // cout << "rewriting field decl:" << vdName << " " << vdloc <<"
         // "<<fd->getType().getAsString()<<endl;
-        if (fd->getType().getAsString().find("struct") == 0) {
+        if (fd->getType().getUnqualifiedType().getAsString().find("struct") ==
+            0) {
           resolvedStruct[vdName + vdloc] = true;
           // cout << "rewriting field decl:" << vdName << " " << vdloc <<" ";
           // extract only the structure name from the type.
-          std::string type = fd->getType().getAsString();
+          std::string type = fd->getType().getUnqualifiedType().getAsString();
+          //cout << "type " << type << endl;
           // cout<<type<<endl;
           if (type.find('[') == std::string::npos) {
             // this logic works because the type is always returned with
@@ -504,12 +512,16 @@ public:
                              type.substr(first, type.length() - first), vdloc);
             // id result is not 0 then at this point the vardecl can be
             // modified.
+            // cout<<"res "<<res<<endl;
             if (res.compare("0") != 0) {
-              Rewrite.ReplaceText(clang::Lexer::findNextToken(
-                                      fd->getBeginLoc(), Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getLocation(),
-                                  res);
+              auto loc = fd->getTypeSourceInfo()->getTypeLoc().getUnqualifiedLoc().getBeginLoc();
+							loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
+							//cout<<"var "<<loc.printToString(*sm)<<endl;
+              if (std::find(writtenLocs.begin(), writtenLocs.end(), loc.printToString(*sm)) == writtenLocs.end()) {
+                Rewrite.ReplaceText(loc, res);
+								writtenLocs.push_back(loc.printToString(*sm));
+								renamedWhileResolving[loc.printToString(*sm)] =true;
+              }
               // mark this struct as renamed for struct dump to correct name
               // while dumping.
               renamedStruct[vdName + vdloc] = true;
@@ -525,11 +537,14 @@ public:
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
-              Rewrite.ReplaceText(clang::Lexer::findNextToken(
-                                      fd->getBeginLoc(), Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getLocation(),
-                                  res);
+              auto loc = fd->getTypeSourceInfo()->getTypeLoc().getUnqualifiedLoc().getBeginLoc();
+							loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
+							//cout<<"var "<<loc.printToString(*sm)<<endl;
+              if (std::find(writtenLocs.begin(), writtenLocs.end(), loc.printToString(*sm)) == writtenLocs.end()) {
+                Rewrite.ReplaceText(loc, res);
+								writtenLocs.push_back(loc.printToString(*sm));
+								renamedWhileResolving[loc.printToString(*sm)] = true;
+              }
               // mark this struct as renamed for struct dump to correct name
               // while dumping.
               renamedStruct[vdName + vdloc] = true;
@@ -552,11 +567,13 @@ public:
         std::string vdloc = vd->getBeginLoc().printToString(*sm);
         vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
         vdloc = vdloc.substr(0, vdloc.find(':'));
-        if (vd->getType().getAsString().find("struct") == 0) {
+        if (vd->getType().getUnqualifiedType().getAsString().find("struct") ==
+            0) {
           resolvedStruct[vdName + vdloc] = true;
           // cout << "rewriting struct decl:" << vdName << " " << vdloc << endl;
           // extract only the structure name from the type.
-          std::string type = vd->getType().getAsString();
+          std::string type = vd->getType().getUnqualifiedType().getAsString();
+          //cout << "type " << type << endl;
           // cout<<type<<endl;
           if (type.find('[') == std::string::npos) {
             // this logic works because the type is always returned with
@@ -569,11 +586,14 @@ public:
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
-              Rewrite.ReplaceText(clang::Lexer::findNextToken(
-                                      vd->getBeginLoc(), Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getLocation(),
-                                  res);
+              auto loc = vd->getTypeSourceInfo()->getTypeLoc().getUnqualifiedLoc().getBeginLoc();
+							loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
+							//cout<<"var "<<loc.printToString(*sm)<<endl;
+							if (std::find(writtenLocs.begin(), writtenLocs.end(), loc.printToString(*sm)) == writtenLocs.end()) {
+                Rewrite.ReplaceText(loc, res);
+								writtenLocs.push_back(loc.printToString(*sm));
+								renamedWhileResolving[loc.printToString(*sm)] =true;
+              }
               // mark this struct as renamed for struct dump to correct name
               // while dumping.
               renamedStruct[vdName + vdloc] = true;
@@ -589,11 +609,14 @@ public:
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
-              Rewrite.ReplaceText(clang::Lexer::findNextToken(
-                                      vd->getBeginLoc(), Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getLocation(),
-                                  res);
+              auto loc = vd->getTypeSourceInfo()->getTypeLoc().getUnqualifiedLoc().getBeginLoc();
+							loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
+							//cout<<"var "<<loc.printToString(*sm)<<endl;
+              if (std::find(writtenLocs.begin(), writtenLocs.end(), loc.printToString(*sm)) == writtenLocs.end()) {
+                Rewrite.ReplaceText(loc, res);
+								writtenLocs.push_back(loc.printToString(*sm));
+								renamedWhileResolving[loc.printToString(*sm)] =true;
+              }
               // mark this struct as renamed for struct dump to correct name
               // while dumping.
               renamedStruct[vdName + vdloc] = true;
@@ -615,11 +638,13 @@ public:
         std::string vdloc = vd->getBeginLoc().printToString(*sm);
         vdloc = vdloc.substr(vdloc.find(':') + 1, vdloc.find(':'));
         vdloc = vdloc.substr(0, vdloc.find(':'));
-        if (vd->getType().getAsString().find("struct") == 0 &&
+        if (vd->getType().getUnqualifiedType().getAsString().find("struct") ==
+                0 &&
             resolvedStruct[vdName + vdloc] == false) {
           resolvedStruct[vdName + vdloc] = true;
           // cout << "rewriting struct decl:" << vdName << " " << vdloc << endl;
-          std::string type = vd->getType().getAsString();
+          std::string type = vd->getType().getUnqualifiedType().getAsString();
+          //cout << "type " << type << endl;
           // cout<<type<<endl;
           if (type.find('[') == std::string::npos) {
             unsigned first = type.find(' ');
@@ -630,11 +655,14 @@ public:
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
-              Rewrite.ReplaceText(clang::Lexer::findNextToken(
-                                      vd->getBeginLoc(), Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getLocation(),
-                                  res);
+              auto loc = vd->getTypeSourceInfo()->getTypeLoc().getUnqualifiedLoc().getBeginLoc();
+							loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
+							//cout<<"var "<<loc.printToString(*sm)<<endl;
+              if (std::find(writtenLocs.begin(), writtenLocs.end(), loc.printToString(*sm)) == writtenLocs.end()) {
+                Rewrite.ReplaceText(loc, res);
+								writtenLocs.push_back(loc.printToString(*sm));
+								renamedWhileResolving[loc.printToString(*sm)] =true;
+              }
               // mark this struct as renamed for struct dump to correct name
               // while dumping.
               renamedStruct[vdName + vdloc] = true;
@@ -650,11 +678,14 @@ public:
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
-              Rewrite.ReplaceText(clang::Lexer::findNextToken(
-                                      vd->getBeginLoc(), Rewrite.getSourceMgr(),
-                                      Rewrite.getLangOpts())
-                                      ->getLocation(),
-                                  res);
+              auto loc = vd->getTypeSourceInfo()->getTypeLoc().getUnqualifiedLoc().getBeginLoc();
+							loc = clang::Lexer::findNextToken(loc, Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation();
+							//cout<<"var "<<loc.printToString(*sm)<<endl;
+              if (std::find(writtenLocs.begin(), writtenLocs.end(), loc.printToString(*sm)) == writtenLocs.end()) {
+                Rewrite.ReplaceText(loc, res);
+								writtenLocs.push_back(loc.printToString(*sm));
+								renamedWhileResolving[loc.printToString(*sm)] =true;
+              }
               // mark this struct as renamed for struct dump to correct name
               // while dumping.
               renamedStruct[vdName + vdloc] = true;
@@ -1053,15 +1084,15 @@ public:
             // has source location less than it.
             //---------------------------------------------------------------//
             //							the call is
-            //global
+            // global
             ////
             //---------------------------------------------------------------//
-            if(find(globalFuncDecls.begin(), globalFuncDecls.end(), callName) != globalFuncDecls.end()){
-							//a global function call;
-						}	
-						else{
-							//throw error;
-						}
+            if (find(globalFuncDecls.begin(), globalFuncDecls.end(),
+                     callName) != globalFuncDecls.end()) {
+              // a global function call;
+            } else {
+              // throw error;
+            }
           }
         }
       } else if (const FunctionDecl *fd =
@@ -1098,12 +1129,12 @@ public:
             // for a while.
             //-------------------------------------------------------------//
             //-------------------------------------------------------------//
-            if(find(globalFuncDecls.begin(), globalFuncDecls.end(), callName) != globalFuncDecls.end()){
-							//a global function call;
-						}	
-						else{
-							//throw error;
-						}
+            if (find(globalFuncDecls.begin(), globalFuncDecls.end(),
+                     callName) != globalFuncDecls.end()) {
+              // a global function call;
+            } else {
+              // throw error;
+            }
           }
         }
       }
@@ -1146,7 +1177,8 @@ public:
                 remove_if(tempLabel.begin() + labelNameLength[tempLabel],
                           tempLabel.end(), [](char c) { return !isalpha(c); }),
                 tempLabel.end());
-            //cout<<"incase1 "<<label<<" "<<labelBounds[label].begin<<" "<<celoc<<endl;
+            // cout<<"incase1 "<<label<<" "<<labelBounds[label].begin<<"
+            // "<<celoc<<endl;
             if (tempLabel.compare(target) == 0) {
               // the names are also same. check for location now.
               // the locs can also be equal in this case.
@@ -1186,12 +1218,14 @@ public:
               remove_if(tempLabel.begin() + labelNameLength[tempLabel],
                         tempLabel.end(), [](char c) { return !isalpha(c); }),
               tempLabel.end());
-          //cout<<"incase3 templabel"<<tempLabel<<" "<<labelBounds[label].begin<<" "<<celoc<<endl;
+          // cout<<"incase3 templabel"<<tempLabel<<"
+          // "<<labelBounds[label].begin<<" "<<celoc<<endl;
           if (tempLabel.compare(target) == 0) {
             // the names are also same. check for location now.
             // the locs can also be equal in this case.
-            //cout<<"incase3 "<<label<<" "<<labelBounds[label].begin<<" "<<celoc<<endl;
-						//here it was a bug earlier it was labelBounds[ls].begin;
+            // cout<<"incase3 "<<label<<" "<<labelBounds[label].begin<<"
+            // "<<celoc<<endl; here it was a bug earlier it was
+            // labelBounds[ls].begin;
             if (labelBounds[label].begin <= stoi(celoc)) {
               // yeah matching call found.
               resolvedCalls[target + celoc] = true;
@@ -1205,23 +1239,25 @@ public:
           }
         }
       }
-			//now try to find in the children of the parent.
-			for (auto elem : parenChilMap) {
-							//temp is the current parent of the call.
-              if (elem.second.compare(temp) == 0) {
-                // the elem has the labelstmt as parent
-                std::string tempLable = elem.first;
-                // temp capture the name of child labelstmt;
-                tempLable.erase(remove_if(tempLable.begin() + labelNameLength[tempLable], tempLable.end(),
-                                     [](char c) { return !isalpha(c); }),
-                           tempLable.end());
-                if (tempLable.compare(target) == 0 && labelBounds[elem.first].begin <= stoi(celoc)) {
-                  resolvedCalls[target + celoc] = true;
-                  callRels[target + celoc] = elem.first;
-                  return elem.first;
-                }
-              }
-						}
+      // now try to find in the children of the parent.
+      for (auto elem : parenChilMap) {
+        // temp is the current parent of the call.
+        if (elem.second.compare(temp) == 0) {
+          // the elem has the labelstmt as parent
+          std::string tempLable = elem.first;
+          // temp capture the name of child labelstmt;
+          tempLable.erase(
+              remove_if(tempLable.begin() + labelNameLength[tempLable],
+                        tempLable.end(), [](char c) { return !isalpha(c); }),
+              tempLable.end());
+          if (tempLable.compare(target) == 0 &&
+              labelBounds[elem.first].begin <= stoi(celoc)) {
+            resolvedCalls[target + celoc] = true;
+            callRels[target + celoc] = elem.first;
+            return elem.first;
+          }
+        }
+      }
       // if nothing found in the children of the parent of the label stmt
       // then go on to the next parent.
       return findCall(parenChilMap[temp], target, celoc);
@@ -2214,7 +2250,7 @@ public:
         &recordResolver);
     // now rewrite the struct definitions by appending the source loc after
     // their name also append the structs which are to be hoisted to struct
-    // strweam.
+    // stream.
     // also recorddecl inside recorddecl must be renamed because when hoisted
     // to global level they give name conflicts.
     RecordRewriteFinder0.addMatcher(
@@ -2288,12 +2324,12 @@ llvm::errs() << sl.first << " " << sl.second << " ";
             llvm::errs()<<label<<" ";
     }
 */
-/*
-    llvm::errs() << "parenchil:\n";
-    for (auto chil : parenChilMap) {
-      llvm::errs() << chil.first << " " << chil.second << "\n";
-    }
-*/
+    /*
+        llvm::errs() << "parenchil:\n";
+        for (auto chil : parenChilMap) {
+          llvm::errs() << chil.first << " " << chil.second << "\n";
+        }
+    */
     /*
          for (auto loc : sourceLocs) {
            llvm::errs() << loc.first << " " << loc.second << "\n";
@@ -2354,7 +2390,9 @@ llvm::errs() << depth.first << " " << depth.second << "\n";
     RecordFinder0.matchAST(Context);
     RecordFinder3.matchAST(Context);
     RecordFinder4.matchAST(Context);
+		//---------------------------------for rewriting labels//
     RewriteFinder.matchAST(Context);
+		//-----------------------------------------------------//
     // reset foundRecord as it is reused in rewriting.
     foundRecord.clear();
 
@@ -2364,7 +2402,11 @@ for (auto c : doNotRename) {
 cout << c.first << " " << c.second << endl;
 }
     */
-
+/*
+for(auto l: renamedWhileResolving){
+			cout<<l.first<<" "<<l.second<<endl;
+	}
+*/
     RecordRewriteFinder0.matchAST(Context);
     RecordRewriteFinder.matchAST(Context);
     RecordRewriteFinder1.matchAST(Context);
