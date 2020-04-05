@@ -1,8 +1,9 @@
-struct s_foo29 {
+struct s_foo32 {
+const struct s * ss2;
 int  * b;
 };
 
-void foo29( struct s_foo29*);
+void foo32( struct s_foo32*);
 
 
 //------------------------------------------//
@@ -13,7 +14,9 @@ void foo29( struct s_foo29*);
 // second iteration it prints out the assign//
 // values. in the third segment the array of//
 // structures is assigned values and then th//
-// ey are printed.                          //
+// ey are printed. the example also show use//
+// of storage classes such as static for var//
+// iables in particular the array b here.	  //
 // EXPECTED OUTPUT													// 
 // 0 20 1 20 2 20 3 20 4 20									//
 // 1																				//
@@ -31,16 +34,18 @@ struct s{
 struct s ss, arr[5];
 
 int main(){
-	int b[20][20];
+	static int b[20][20];																					//use with storage class static.
+	const struct s ss2; 
 	
-struct s_foo29 sfoo29;
-sfoo29.b = &b;
+struct s_foo32 sfoo32;
+sfoo32.ss2 = &ss2;
+sfoo32.b = &b;
 																															//initialized and then printed.
-	foo29(&sfoo29);	
+	foo32(&sfoo32);	
 }
 
 
-void foo29( struct s_foo29* __s ){
+void foo32( struct s_foo32* __s ){
 
 			ss.i = 0;
 			for(ss.i = 0; ss.i < 5; ss.i++){

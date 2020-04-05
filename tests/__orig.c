@@ -6,7 +6,7 @@ void foo21( struct s_foo21*);
 
 
 //------------------------------------------//
-// this test case is the one which was pres // 
+// This test case is the one which was pres // 
 // ent in the the assignment writeup. It si //
 // mply demostrates that the tool is able   //
 // to handle labels with static scoping in  //
@@ -21,14 +21,14 @@ void foo21( struct s_foo21*);
 
 #include<stdio.h>
 
-void main(){
+int main(){
 	int x = 3;
-	
+
 	
 struct s_foo21 sfoo21;
 sfoo21.x = &x;
-
-
+	
+	
 	foo21(&sfoo21);
 	
 	foo21(&sfoo21);
@@ -38,13 +38,14 @@ sfoo21.x = &x;
 	foo21(&sfoo21);
 
 	printf("x is: %d\n", x);
-
+	
+	return 0;
 }
 
 
 void foo21( struct s_foo21* __s ){
 
-		printf("x is: %d\n", (*(__s->x)));
+		printf("x is: %d\n", (*(__s->x)));								
 		(*(__s->x))++;
 	}
 

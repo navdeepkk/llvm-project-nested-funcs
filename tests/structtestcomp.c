@@ -25,17 +25,14 @@ void hey(){
 	struct point p;														//this should resolve to point defined in hey.
 		p.x = 3;
 		p.y = 3;
-		printf("%d %d\n", p.x, p.y);
-	
+		printf("%d %d\n", p.x, p.y);	
 }
 
-struct point{
-			int x, y;
-		};
 
 int main(){
 	struct point{
 			int x, y;
+			struct point * p;
 		};
 	foo:{		
 	struct point{

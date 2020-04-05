@@ -1,26 +1,26 @@
-struct s_r20 {
+struct s_r19 {
 };
 
-struct s_p24 {
-struct s_r20 *__s;
+struct s_p23 {
+struct s_r19 *__s;
 int * b;
 };
 
-struct s_q32 {
-struct s_p24 *__s;
+struct s_q31 {
+struct s_p23 *__s;
 int * c;
 int * a;
 };
 
-struct s_s36 {
-struct s_q32 *__s;
+struct s_s35 {
+struct s_q31 *__s;
 int * d;
 };
 
-void r20( struct s_r20*);
-void p24( struct s_p24*);
-void q32( struct s_q32*);
-void s36( struct s_s36*);
+void r19( struct s_r19*);
+void p23( struct s_p23*);
+void q31( struct s_q31*);
+void s35( struct s_s35*);
 
 
 //------------------------------------------//
@@ -28,8 +28,7 @@ void s36( struct s_s36*);
 // recursion between functions at arbitrary //
 // depths. The innermost function can call  //
 // any of the functions that are in its     //
-// scope    
-// 
+// scope.                                   //
 // EXPECTED OUTPUT													//
 // b:4 a:0                                  //
 // b:3 a:0                                  //
@@ -42,26 +41,26 @@ void s36( struct s_s36*);
 
 int main(){
     
-struct s_r20 sr20;
+struct s_r19 sr19;
 
-    r20(&sr20);
+    r19(&sr19);
 return 0;
 }
 
 
 
-void r20( struct s_r20* __s ){
+void r19( struct s_r19* __s ){
 
         int b = 5;
             
-struct s_p24 sp24;
-sp24.__s = __s;
-sp24.b = &b;
+struct s_p23 sp23;
+sp23.__s = __s;
+sp23.b = &b;
 
-        p24(&sp24);    
+        p23(&sp23);    
     }
 
-void p24( struct s_p24* __s ){
+void p23( struct s_p23* __s ){
 
 								int a = 0;
                 (*(__s->b))--;
@@ -69,27 +68,27 @@ void p24( struct s_p24* __s ){
                 if((*(__s->b))==0) return;
                 int c;
                 
-struct s_q32 sq32;
-sq32.__s = __s;
-sq32.c = &c;
-sq32.a = &a;
+struct s_q31 sq31;
+sq31.__s = __s;
+sq31.c = &c;
+sq31.a = &a;
 
-                q32(&sq32);
+                q31(&sq31);
             }
 
-void q32( struct s_q32* __s ){
+void q31( struct s_q31* __s ){
 
                     int d;
                     
-struct s_s36 ss36;
-ss36.__s = __s;
-ss36.d = &d;
+struct s_s35 ss35;
+ss35.__s = __s;
+ss35.d = &d;
 
-                    s36(&ss36);
+                    s35(&ss35);
                 }
 
-void s36( struct s_s36* __s ){
+void s35( struct s_s35* __s ){
 
-                        p24(__s->__s->__s);								//calls p at which is defined outside s.
+                        p23(__s->__s->__s);								//calls p at which is defined outside s.
                     }
 

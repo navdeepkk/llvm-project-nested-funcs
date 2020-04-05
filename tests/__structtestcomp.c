@@ -1,33 +1,51 @@
-struct s_foo30 {
+struct s_foo42 {
 };
 
-struct s_bar38 {
-struct s_foo30 *__s;
+struct s_bar50 {
+struct s_foo42 *__s;
 };
 
-struct s_foe46 {
-struct s_foo30 *__s;
+struct s_foe58 {
+struct s_foo42 *__s;
 };
 
-struct point34{
+struct point46{
 
 			int x, y;
 		};
 
-struct point6{
+struct point23{
 
 		int x, y;
 	};
 
-struct point26{
+struct point37{
 
 			int x, y;
+			struct point * p;
 		};
 
-void foo30( struct s_foo30*);
-void bar38( struct s_bar38*);
-void foe46( struct s_foe46*);
+void foo42( struct s_foo42*);
+void bar50( struct s_bar50*);
+void foe58( struct s_foe58*);
 
+
+//------------------------------------------//
+// This exapmle demostrates structures struc//
+// ture renaming. labels foo, bar and foe		//
+// all declare a strucutre named point in   //
+// themselves. now all of them have to be   //
+// hoisted to a global level just so that th//
+// remain in the scope of the label of which//
+// they are defined. Also their varibles and//
+// they themselves are to be renamed appropr//
+// iately.                                  //
+// EXPECTED OUTPUT													// 
+// 1 1              												//
+// 2 2              												//
+// 2 2              												//
+// 3 3              												//
+//------------------------------------------//
 
 #include<stdio.h>
 
@@ -35,27 +53,21 @@ void hey(){
 	
 
 
-	struct point6 p;
+	struct point23 p;														//this should resolve to point defined in hey.
 		p.x = 3;
 		p.y = 3;
-		printf("%d %d\n", p.x, p.y);
-	
+		printf("%d %d\n", p.x, p.y);	
 }
 
-
-struct point{
-
-			int x, y;
-		};
 
 int main(){
 	
 
 	
-struct s_foo30 sfoo30;
+struct s_foo42 sfoo42;
 
-	foo30(&sfoo30);
-			struct point26 p2;
+	foo42(&sfoo42);
+			struct point37 p2;													//this should resolve to point defined in main.
 			p2.x = 2;
 			p2.y = 2;
 			printf("%d %d\n", p2.x, p2.y);
@@ -65,33 +77,33 @@ struct s_foo30 sfoo30;
 
 
 
-void foo30( struct s_foo30* __s ){
+void foo42( struct s_foo42* __s ){
 		
 	
 
 		
-struct s_bar38 sbar38;
-sbar38.__s = __s;
+struct s_bar50 sbar50;
+sbar50.__s = __s;
 
 		
-struct s_foe46 sfoe46;
-sfoe46.__s = __s;
+struct s_foe58 sfoe58;
+sfoe58.__s = __s;
 
-	bar38(&sbar38);
-	foe46(&sfoe46);
+	bar50(&sbar50);
+	foe58(&sfoe58);
 }
 
-void bar38( struct s_bar38* __s ){
+void bar50( struct s_bar50* __s ){
 
-			struct point34 p1;
+			struct point46 p1;													//this should resolve to point defined in foo.
 			p1.x = 1;
 			p1.y = 1;
 			printf("%d %d\n", p1.x, p1.y);
 		}
 
-void foe46( struct s_foe46* __s ){
+void foe58( struct s_foe58* __s ){
 
-			struct point34 p2;
+			struct point46 p2;													//this should resolve to point defined in foo.
 			p2.x = 2;
 			p2.y = 2;
 			printf("%d %d\n", p2.x, p2.y);

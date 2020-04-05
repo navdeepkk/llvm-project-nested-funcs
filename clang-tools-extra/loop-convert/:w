@@ -105,8 +105,6 @@ std::unordered_map<std::string, bool> renamedWhileResolving;
 // marked call depths is utility for finding call depths, marks all the calls as
 // true. so they are not processed again.
 std::unordered_map<std::string, bool> resolvedCalls;
-//structtoemit is a replacement for structbuff
-std::unordered_map<std::string, std::string>structToEmit;
 DeclarationMatcher globalMatcher =
     varDecl(hasDeclContext(translationUnitDecl()), isExpansionInMainFile())
         .bind("global");
@@ -192,22 +190,7 @@ void structDump() {
     }
   }
   // add structs found in between to the ss.
-  // donot add blindly add them in order of there source locations.
-	int min; 
-	while(!structToEmit.empty()){
-		min = structBounds[structToEmit.begin()->first].begin;
-		std::string target;
-		for(auto limit: structToEmit){
-			if(structBounds[limit.first].begin <= min){
-				target = limit.first;
-				min = structBounds[limit.first].begin;
-			}
-		}
-		//cout<<target<<"min"<<min<<endl;
-		ss<<structToEmit[target];
-		structToEmit.erase(target);
-	}
-  //ss << structBuff.str() << "";
+  ss << structBuff.str() << "";
   // print forward declarations of functions;
   for (auto label : labels) {
     ss << "void " << label << "( "
@@ -297,10 +280,6 @@ public:
           locrdc = locrdc.substr(0, locrdc.find(':'));
           recordinrecord[rdp->getNameAsString() + loclrdp].push_back(
               rdc->getNameAsString() + locrdc);
-					//push the record itself into the vector so that declaration 
-					//of same name resolves to it.
-          recordinrecord[rdp->getNameAsString() + loclrdp].push_back(
-              rdp->getNameAsString() + loclrdp);
           //      Rewrite.InsertTextAfterToken(
           //        clang::Lexer::findNextToken(rd->getBeginLoc(),
           //                                  Rewrite.getSourceMgr(),
@@ -431,7 +410,6 @@ public:
                   ->getLocation(),
               locrd);
 					}
-					structToEmit[rd->getNameAsString() + locrd] = Rewrite.getRewrittenText(rd->getSourceRange()) + ";\n\n";
           structBuff << Rewrite.getRewrittenText(rd->getSourceRange())
                      << ";\n\n";
           // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
@@ -463,7 +441,6 @@ public:
                     ->getLocation(),
                 locrd);
 						}
-						structToEmit[rd->getNameAsString() + locrd] = Rewrite.getRewrittenText(rd->getSourceRange())+ ";\n\n";
             structBuff << Rewrite.getRewrittenText(rd->getSourceRange())
                        << ";\n\n";
             // Rewrite.ReplaceText(rd->getBeginLoc(), "\n");
@@ -630,7 +607,7 @@ public:
             type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
             unsigned last = type.find('[');
             string res = findRec(ls->getName() + locls,
-                                 structName, vdloc);
+                                 type.substr(first, last - first), vdloc);
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
@@ -669,7 +646,6 @@ public:
           resolvedStruct[vdName + vdloc] = true;
           // cout << "rewriting struct decl:" << vdName << " " << vdloc << endl;
           std::string type = vd->getType().getUnqualifiedType().getAsString();
-					std::string structName = vd->getType().getUnqualifiedType().getBaseTypeIdentifier()->getName().str();
           //cout << "type " << type << endl;
           // cout<<type<<endl;
           if (type.find('[') == std::string::npos) {
@@ -677,7 +653,7 @@ public:
             type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
             string res =
                 findRec(ls->getNameAsString() + locls,
-                        structName, vdloc);
+                        type.substr(first, type.length() - first), vdloc);
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
@@ -700,7 +676,7 @@ public:
             type.erase(std::remove(type.begin(), type.end(), ' '), type.end());
             unsigned last = type.find('[');
             string res = findRec(ls->getNameAsString() + locls,
-                                 structName, vdloc);
+                                 type.substr(first, last - first), vdloc);
             // id result is not 0 then at this point the vardecl can be
             // modified.
             if (res.compare("0") != 0) {
@@ -760,7 +736,6 @@ public:
       // if not found in the enclosing struct then go the parent of the ls
       // and then check the level 1 structure declarations only. will get parent
       // from parenchilmap in this case.
-      //cout<<"xxxxxxxxxxxxxxxxxxxxxxxxxxx"<<ls<<" "<<structparenChilMap[ls]<<endl;
       return findRecInParent(ls, target, celoc);
     }
     for (auto elem : recordinrecord[ls]) {
@@ -778,8 +753,8 @@ public:
     if (depths[ls] == 0) {
       // find in the target in the list of the label ls.
       for (auto elem : record[ls]) {
-         //cout << "findrecinparentdepth0 elem: " << elem << " target: " << target <<"depth "<<structdepths[elem]<< endl;
-        if (elem.find(target) != std::string::npos && structdepths[elem] == 1 &&
+        // cout << "elem: " << elem << " target: " << target << endl;
+        if (elem.find(target) != std::string::npos && structdepths[ls] == 1 &&
             structBounds[elem].begin <= stoi(celoc)) {
           return elem;
         }
@@ -787,8 +762,8 @@ public:
       return "0";
     }
     for (auto elem : record[ls]) {
-      //cout << "findrecinparent elem: " << elem << " target: " << target <<"depth "<<structdepths[elem]<< endl;
-      if (elem.find(target) != std::string::npos && structdepths[elem] == 1 &&
+      // cout << "elem: " << elem << " target: " << target << endl;
+      if (elem.find(target) != std::string::npos && structdepths[ls] == 1 &&
           structBounds[elem].begin <= stoi(celoc)) {
         return elem;
       }

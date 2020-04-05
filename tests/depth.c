@@ -26,7 +26,7 @@ int main(){
                 q:{
                     int d;
                     s:{
-                        p();								//calls p at which is defined outside s.
+                        p();								//calls p which is defined at a palce outside s, well with the scope of the call.
                     }
                     s();
                 }
