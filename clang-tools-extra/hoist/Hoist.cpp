@@ -449,7 +449,7 @@ public:
   Rewriter TheRewriter;
 
   void EndSourceFileAction() override {
-    this->TheRewriter
+		this->TheRewriter
         .getEditBuffer(this->TheRewriter.getSourceMgr().getMainFileID())
         .write(llvm::outs());
   }

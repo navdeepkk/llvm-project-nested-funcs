@@ -24,7 +24,7 @@ label:{
 		}
 	foo();
 	}
-	
+
 	label();
 
 return 0;

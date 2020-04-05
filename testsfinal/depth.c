@@ -35,7 +35,6 @@ int main(){
         p();    
     }
     r();
-	foo();
 return 0;
 }
 

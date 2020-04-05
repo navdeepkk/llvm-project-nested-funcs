@@ -3,6 +3,12 @@ const struct s * ss2;
 int  * b;
 };
 
+struct s{
+
+	int i;
+	int a[5][5];
+};
+
 void foo32( struct s_foo32*);
 
 
@@ -25,11 +31,7 @@ void foo32( struct s_foo32*);
 #include<stdio.h>
 
 
-struct s{
 
-	int i;
-	int a[5][5];
-};
 
 struct s ss, arr[5];
 

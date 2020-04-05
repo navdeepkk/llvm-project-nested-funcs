@@ -9,11 +9,6 @@ struct s_foe58 {
 struct s_foo42 *__s;
 };
 
-struct point46{
-
-			int x, y;
-		};
-
 struct point23{
 
 		int x, y;
@@ -22,8 +17,18 @@ struct point23{
 struct point37{
 
 			int x, y;
-			struct point * p;
+			struct point37 * p;
 		};
+
+struct point46{
+
+			int a, b;
+		};
+
+struct point62{
+
+				int c, d;
+			};
 
 void foo42( struct s_foo42*);
 void bar50( struct s_bar50*);
@@ -68,7 +73,7 @@ struct s_foo42 sfoo42;
 
 	foo42(&sfoo42);
 			struct point37 p2;													//this should resolve to point defined in main.
-			p2.x = 2;
+			p2.x = 2;																	//this line will give compiler error if resolved incorrectly.
 			p2.y = 2;
 			printf("%d %d\n", p2.x, p2.y);
 	hey();
@@ -96,16 +101,18 @@ sfoe58.__s = __s;
 void bar50( struct s_bar50* __s ){
 
 			struct point46 p1;													//this should resolve to point defined in foo.
-			p1.x = 1;
-			p1.y = 1;
-			printf("%d %d\n", p1.x, p1.y);
+			p1.a = 1;																	//this line will give compiler error if resolved incorrectly.
+			p1.b = 1;
+			printf("%d %d\n", p1.a, p1.b);
 		}
 
 void foe58( struct s_foe58* __s ){
 
-			struct point46 p2;													//this should resolve to point defined in foo.
-			p2.x = 2;
-			p2.y = 2;
-			printf("%d %d\n", p2.x, p2.y);
+			
+
+			struct point62 p2;													//this should resolve to point defined locally.
+			p2.c = 2;																	//this line will give compiler error if resolved incorrectly. 		
+			p2.d = 2;																	
+			printf("%d %d\n", p2.c, p2.d);
 		}
 

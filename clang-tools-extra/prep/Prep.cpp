@@ -155,7 +155,7 @@ public:
 
   void HandleTranslationUnit(ASTContext &Context) override {
     Finder.matchAST(Context);
-    Finder2.matchAST(Context);
+    Finder2.matchAST(Context);	
   }
 
 private:

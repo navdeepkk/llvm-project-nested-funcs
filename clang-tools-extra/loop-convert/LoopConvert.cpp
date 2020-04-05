@@ -80,6 +80,7 @@ std::unordered_map<std::string, bool> resolvedStruct;
 // doNotRename is a map for structure declarations inside strructures
 // so that they should not be renamed.
 std::unordered_map<std::string, bool> doNotRename;
+std::unordered_map<std::string, bool> doNotMoveThisStruct;
 // parenstack is for matching parentheses
 std::stack<char> parenStack;
 // labelNameLenghts is present to remove the assist callresolver
@@ -278,6 +279,43 @@ public:
   Rewriter &Rewrite;
 };
 //---------------------------------------------------------------------------------------------------------------//
+class GlobalStructRemover : public MatchFinder::MatchCallback {
+	public:
+	GlobalStructRemover( Rewriter &R): Rewrite(R) {}
+  virtual void run(const MatchFinder::MatchResult &Result) {
+    SourceManager *sm = Result.SourceManager;
+    if (const RecordDecl *rdp =
+            Result.Nodes.getNodeAs<clang::RecordDecl>("parent")) {
+      if (const RecordDecl *rdc =
+              Result.Nodes.getNodeAs<clang::RecordDecl>("child")) {
+					std::string locrdc = rdc->getBeginLoc().printToString(*sm);
+					if (locrdc.find("invalid") == std::string::npos) {
+          locrdc = locrdc.substr(locrdc.find(':') + 1, locrdc.find(':'));
+          locrdc = locrdc.substr(0, locrdc.find(':'));
+						doNotMoveThisStruct[rdc->getNameAsString() + locrdc] = true;
+					}
+			}
+		}
+    if (const RecordDecl *rd =
+			Result.Nodes.getNodeAs<clang::RecordDecl>("struct")) {
+			std::string loclrd = rd->getBeginLoc().printToString(*sm);
+			loclrd = loclrd.substr(loclrd.find(':') + 1, loclrd.find(':'));
+			loclrd = loclrd.substr(0, loclrd.find(':'));
+			//cout<<"xxxxxxxxxxxxxxxxxxxxxxxx"<<rd->getNameAsString()<<" "<<loclrd<<endl;
+			if(!doNotMoveThisStruct[rd->getNameAsString() + loclrd]){
+			//cout<<"yyyyyyyyyyyyyyyyyyyyyyyy"<<rd->getNameAsString()<<" "<<loclrd<<endl;
+			structToEmit[rd->getNameAsString() + loclrd] = Rewrite.getRewrittenText(rd->getSourceRange())+ ";\n\n";
+			structBounds[rd->getNameAsString() + loclrd].begin = stoi(loclrd);
+			Rewrite.ReplaceText(rd->getSourceRange(), ""); 
+			Rewrite.ReplaceText(clang::Lexer::findNextToken(rd->getEndLoc(), Rewrite.getSourceMgr(), Rewrite.getLangOpts())->getLocation(), ""); 
+		}
+	}
+	}
+
+private:
+  Rewriter &Rewrite;
+};
+//---------------------------------------------------------------------------------------------------------------//
 class RecordMatcher : public MatchFinder::MatchCallback {
 public:
   RecordMatcher() {}
@@ -387,7 +425,7 @@ public:
         locrdc = locrdc.substr(locrdc.find(':') + 1, locrdc.find(':'));
         locrdc = locrdc.substr(0, locrdc.find(':'));
         if (locrdc.find("invalid") == std::string::npos &&
-            !foundRecord[rdc->getNameAsString() + locrdc]) {
+            !foundRecord[rdc->getNameAsString() + locrdc] && !doNotMoveThisStruct[rdc->getNameAsString() + locrdc]) {
           // cout << "rewriting record " << rd->getNameAsString() << " " <<
           // locrd
           //  << endl;
@@ -2123,11 +2161,14 @@ private:
 class MyASTConsumer : public ASTConsumer {
 public:
   MyASTConsumer(Rewriter &R, PrintingPolicy &pp)
-      : globalBuilder(R), labelBuilder(R), labelRelBuilder(R),
+	  : globalstructRemover(R), globalBuilder(R), labelBuilder(R), labelRelBuilder(R),
         structRelBuilder(R), structBuilder(R), structDumper(R), callDepth(),
         structInit(R), labelRewriter(R), labelRenamer(R), labelHoist(R),
         labelRemover(R), functionDumper(R), recordFinder(), recordResolver(R),
-        recordRewriter(R) {
+        recordRewriter(R) {	
+		GlobalStructFinder1.addMatcher(recordDecl(isExpansionInMainFile(), hasDeclContext(translationUnitDecl()), hasAncestor(recordDecl().bind("parent"))).bind("child"), &globalstructRemover);
+		//finding global records and removing them appending to the structbuff;
+		GlobalStructFinder2.addMatcher(recordDecl(isExpansionInMainFile(), hasDeclContext(translationUnitDecl())).bind("struct"), &globalstructRemover);
     // all code from main goes here.
     // Find all the globals and labelStmt first.
     // Find all the globals and store them in struct with type and identfier.
@@ -2337,7 +2378,9 @@ public:
 
   void HandleTranslationUnit(ASTContext &Context) override {
     // Run the matchers when we have the whole TU parsed.
-    Finder.matchAST(Context);
+    GlobalStructFinder1.matchAST(Context);
+    GlobalStructFinder2.matchAST(Context);
+		Finder.matchAST(Context);
     /*
 llvm::errs() << "soucrcelocs\n";
 
@@ -2542,7 +2585,8 @@ private:
   FunctionDumper functionDumper;
   RecordMatcher recordFinder; // finds all the recordDecl and adds it to the
                               // appropriate list
-  RecordResolver recordResolver;
+  GlobalStructRemover globalstructRemover;
+	RecordResolver recordResolver;
   RecordRewriter recordRewriter;
   MatchFinder Finder;
   MatchFinder MainDumpFinder;
@@ -2567,6 +2611,8 @@ private:
   MatchFinder LabelHoistFinder;
   MatchFinder LabelRemoveFinder;
   MatchFinder FunctionDumpFinder;
+	MatchFinder GlobalStructFinder1;
+	MatchFinder GlobalStructFinder2;
 };
 //----------------------------------------------------------------------------------------------------------------------//
 class MyFrontendAction : public ASTFrontendAction {

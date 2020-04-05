@@ -1,6 +1,6 @@
 //------------------------------------------//
 // This test case shows that arrays of any  //
-// dimensions are supported along with and  //
+// dimensions are supported						 and  //
 // may be captured from any scope and also  //
 // they may be indexed with any variable    //
 // within its scope or from scopes captured //
